@@ -40,6 +40,18 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
 @media(max-width:800px){.detected{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.detected{grid-template-columns:1fr}}
 
+
+.rank{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#24262c;color:var(--gold2);font-weight:800}
+.rank.top{background:var(--gold);color:#111}
+.analysis-controls{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin:14px 0}
+.metric-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}
+.metric-summary .card{padding:14px}
+.metric-summary b{font-size:22px;color:var(--gold2)}
+.barwrap{min-width:120px;height:8px;background:#292b31;border-radius:99px;overflow:hidden}
+.barfill{height:100%;background:var(--gold);border-radius:99px}
+@media(max-width:800px){.analysis-controls,.metric-summary{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.analysis-controls,.metric-summary{grid-template-columns:1fr}}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
@@ -50,7 +62,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V2.2 PDF corretto</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V2.3 Confronto squadra</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -76,13 +88,31 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
     <div id="evalTable"></div>
   </section>
 
+  
   <section id="analysis" class="section">
     <div class="card">
-      <div class="row"><h3>Analisi miglioramenti</h3><span class="spacer"></span>
-      <select id="analysisTest" class="btn" onchange="renderAnalysis()"></select></div>
+      <div class="row">
+        <div><h3 style="margin-bottom:4px">Confronto squadra</h3>
+        <div class="muted">Confronta l’ultimo risultato di ogni atleta e monitora i miglioramenti.</div></div>
+        <span class="spacer"></span>
+        <button class="btn" onclick="exportAnalysisCsv()">Esporta CSV</button>
+      </div>
+      <div class="analysis-controls">
+        <div class="field"><label>Parametro</label><select id="analysisTest" onchange="renderAnalysis()"></select></div>
+        <div class="field"><label>Ordina</label>
+          <select id="analysisSort" onchange="renderAnalysis()">
+            <option value="ranking">Classifica</option>
+            <option value="improvement">Miglioramento</option>
+            <option value="name">Nome atleta</option>
+          </select>
+        </div>
+        <div class="field"><label>Cerca</label><input id="analysisSearch" placeholder="Nome atleta..." oninput="renderAnalysis()"></div>
+      </div>
+      <div id="analysisSummary" class="metric-summary"></div>
       <div id="analysisTable"></div>
     </div>
   </section>
+
 
   <section id="catalog" class="section">
     <div class="toolbar"><button class="btn gold" onclick="openTest()">+ Aggiungi test</button></div>
@@ -218,7 +248,79 @@ function openTest(){tName.value="";tUnit.value="";tCategory.value="";testModal.c
 function saveTest(){if(!tName.value||!tUnit.value)return alert("Compila nome e unità");db.tests.push({name:tName.value.trim(),unit:tUnit.value.trim(),direction:tDirection.value,category:tCategory.value.trim()});closeModal("testModal");persist()}
 function renderCatalog(){catalogTable.innerHTML=`<table><thead><tr><th>Test</th><th>Unità</th><th>Categoria</th><th>Obiettivo</th><th></th></tr></thead><tbody>${db.tests.map((t,i)=>`<tr><td><b>${t.name}</b></td><td>${t.unit}</td><td>${t.category||"—"}</td><td>${t.direction==="high"?"Più alto":"Più basso"}</td><td><button class="btn danger" onclick="deleteTest(${i})">Elimina</button></td></tr>`).join("")}</tbody></table>`}
 function deleteTest(i){if(confirm("Eliminare questo test dal catalogo?")){db.tests.splice(i,1);persist()}}
-function renderAnalysis(){analysisTest.innerHTML=db.tests.map(t=>`<option ${analysisTest.value===t.name?"selected":""}>${t.name}</option>`).join("");let name=analysisTest.value||db.tests[0]?.name;let t=db.tests.find(x=>x.name===name);let rows=db.athletes.map(a=>{let es=db.evaluations.filter(e=>e.athleteId===a.id&&e.test===name).sort((x,y)=>x.date.localeCompare(y.date));if(es.length<1)return null;let first=es[0].value,last=es.at(-1).value;let imp=first===0?0:((t.direction==="high"?(last-first):(first-last))/Math.abs(first))*100;return {a,first,last,imp,n:es.length}}).filter(Boolean).sort((x,y)=>y.imp-x.imp);analysisTable.innerHTML=rows.length?`<table><thead><tr><th>Atleta</th><th>Primo</th><th>Ultimo</th><th>Valutazioni</th><th>Miglioramento</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.a.surname} ${r.a.name}</b></td><td>${r.first} ${t.unit}</td><td>${r.last} ${t.unit}</td><td>${r.n}</td><td class="${r.imp>=0?'good':'bad'}"><b>${r.imp>=0?'+':''}${r.imp.toFixed(1)}%</b></td></tr>`).join("")}</tbody></table>`:'<div class="empty">Servono valutazioni per questo test</div>'}
+
+function getAnalysisRows(){
+  const name=analysisTest.value||db.tests[0]?.name;
+  const t=db.tests.find(x=>x.name===name)||{unit:"",direction:"high"};
+  const q=(analysisSearch?.value||"").toLowerCase().trim();
+  let rows=db.athletes.map(a=>{
+    const es=db.evaluations.filter(e=>e.athleteId===a.id&&e.test===name).sort((x,y)=>x.date.localeCompare(y.date));
+    if(!es.length)return null;
+    const first=es[0],last=es.at(-1);
+    const improvement=first.value===0?0:((t.direction==="high"?(last.value-first.value):(first.value-last.value))/Math.abs(first.value))*100;
+    return {a,first:first.value,last:last.value,lastDate:last.date,improvement,n:es.length};
+  }).filter(Boolean).filter(r=>(r.a.surname+" "+r.a.name+" "+r.a.id).toLowerCase().includes(q));
+  const sortMode=analysisSort?.value||"ranking";
+  if(sortMode==="name") rows.sort((x,y)=>(x.a.surname+" "+x.a.name).localeCompare(y.a.surname+" "+y.a.name));
+  else if(sortMode==="improvement") rows.sort((x,y)=>y.improvement-x.improvement);
+  else rows.sort((x,y)=>t.direction==="high"?y.last-x.last:x.last-y.last);
+  return {rows,t,name};
+}
+
+function renderAnalysis(){
+  const selected=analysisTest?.value;
+  analysisTest.innerHTML=db.tests.map(t=>`<option value="${t.name}" ${selected===t.name?"selected":""}>${t.name}</option>`).join("");
+  if(!analysisTest.value && db.tests[0]) analysisTest.value=db.tests[0].name;
+  const {rows,t}=getAnalysisRows();
+  if(!rows.length){
+    analysisSummary.innerHTML="";
+    analysisTable.innerHTML='<div class="empty">Nessuna valutazione disponibile per questo parametro</div>';
+    return;
+  }
+  const values=rows.map(r=>r.last);
+  const avg=values.reduce((a,b)=>a+b,0)/values.length;
+  const best=t.direction==="high"?Math.max(...values):Math.min(...values);
+  const improved=rows.filter(r=>r.improvement>0.0001).length;
+  analysisSummary.innerHTML=`
+    <div class="card"><span class="muted">Atleti valutati</span><br><b>${rows.length}</b></div>
+    <div class="card"><span class="muted">Media squadra</span><br><b>${avg.toFixed(1)} ${t.unit}</b></div>
+    <div class="card"><span class="muted">Miglior risultato</span><br><b>${best} ${t.unit}</b></div>
+    <div class="card"><span class="muted">Atleti migliorati</span><br><b>${improved}</b></div>`;
+  const min=Math.min(...values),max=Math.max(...values),range=Math.max(0.0001,max-min);
+  analysisTable.innerHTML=`<table><thead><tr>
+    <th>Pos.</th><th>Atleta</th><th>Ultimo valore</th><th>Confronto</th>
+    <th>Primo valore</th><th>Data</th><th>Test</th><th>Miglioramento</th>
+  </tr></thead><tbody>${rows.map((r,i)=>{
+    const pct=t.direction==="high"?((r.last-min)/range)*100:((max-r.last)/range)*100;
+    return `<tr>
+      <td><span class="rank ${i<3?"top":""}">${i+1}</span></td>
+      <td><b>${r.a.surname} ${r.a.name}</b><div class="muted">${r.a.id}</div></td>
+      <td><b style="color:var(--gold2)">${r.last} ${t.unit}</b></td>
+      <td><div class="barwrap"><div class="barfill" style="width:${Math.max(5,pct)}%"></div></div></td>
+      <td>${r.first} ${t.unit}</td>
+      <td>${fmt(r.lastDate)}</td>
+      <td>${r.n}</td>
+      <td class="${r.improvement>=0?'good':'bad'}"><b>${r.improvement>=0?'+':''}${r.improvement.toFixed(1)}%</b></td>
+    </tr>`;
+  }).join("")}</tbody></table>`;
+}
+
+function exportAnalysisCsv(){
+  const {rows,t,name}=getAnalysisRows();
+  if(!rows.length)return alert("Non ci sono dati da esportare.");
+  const esc=v=>`"${String(v??"").replaceAll('"','""')}"`;
+  const lines=[
+    ["Posizione","Atleta","ID","Parametro","Ultimo valore","Unità","Primo valore","Data ultimo test","Numero test","Miglioramento %"],
+    ...rows.map((r,i)=>[i+1,`${r.a.surname} ${r.a.name}`,r.a.id,name,r.last,t.unit,r.first,r.lastDate,r.n,r.improvement.toFixed(1)])
+  ];
+  const csv=lines.map(row=>row.map(esc).join(";")).join("\\n");
+  const blob=new Blob(["\\ufeff"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`Confronto_${name.replace(/[^a-z0-9]+/gi,"_")}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
 function refreshDashboard(){kAthletes.textContent=db.athletes.length;kTests.textContent=db.evaluations.length;kCatalog.textContent=db.tests.length;kRecent.textContent=db.evaluations.length?fmt([...db.evaluations].sort((a,b)=>b.date.localeCompare(a.date))[0].date):"—";chips.innerHTML=db.tests.slice(0,12).map(t=>`<span class="chip">${t.name}</span>`).join("");drawChart()}
 function drawChart(){let c=chart,ctx=c.getContext("2d"),dpr=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);let months=[];for(let i=11;i>=0;i--){let d=new Date();d.setMonth(d.getMonth()-i);months.push({key:d.toISOString().slice(0,7),label:d.toLocaleDateString("it-IT",{month:"short"})})}let vals=months.map(m=>db.evaluations.filter(e=>e.date.startsWith(m.key)).length),max=Math.max(1,...vals);ctx.strokeStyle="#2a2c32";ctx.fillStyle="#9b9ca2";ctx.font="12px system-ui";months.forEach((m,i)=>{let x=35+i*(w-50)/11;ctx.fillText(m.label,x-10,h-12)});ctx.beginPath();vals.forEach((v,i)=>{let x=35+i*(w-50)/11,y=h-35-v*(h-60)/max;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle="#d8b25c";ctx.lineWidth=3;ctx.stroke();vals.forEach((v,i)=>{let x=35+i*(w-50)/11,y=h-35-v*(h-60)/max;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle="#f0d58b";ctx.fill()})}
 function fmt(d){return d?new Date(d+"T12:00:00").toLocaleDateString("it-IT"):"—"}

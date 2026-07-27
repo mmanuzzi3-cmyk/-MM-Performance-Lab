@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab V2.2",
+  "name": "MM Performance Lab V2.3",
   "short_name": "MM Lab",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#08090a",
   "theme_color": "#0b0b0c",
-  "description": "Gestionale con importazione corretta dei Wellness Report Technogym"
+  "description": "Gestionale con confronto automatico della squadra"
 }
