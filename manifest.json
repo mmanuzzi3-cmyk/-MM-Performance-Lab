@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab V4.1",
+  "name": "MM Performance Lab V4.2",
   "short_name": "MM Lab",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#08090a",
   "theme_color": "#0b0b0c",
-  "description": "Importazione verificata con pagine fisse e controllo dei test forza"
+  "description": "Gestione importazioni Technogym, backup e ripristino"
 }

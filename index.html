@@ -76,6 +76,15 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   .status.green,.status.yellow,.status.red{color:#111!important;background:#eee!important}
 }
 
+
+.data-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}
+.data-card{background:#111216;border:1px solid var(--line);border-radius:14px;padding:16px}
+.data-card b{display:block;font-size:26px;color:var(--gold2)}
+.import-list{display:grid;gap:10px}
+.import-item{display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:10px;align-items:center;background:#111216;border:1px solid var(--line);border-radius:12px;padding:12px}
+@media(max-width:850px){.data-grid{grid-template-columns:repeat(2,1fr)}.import-item{grid-template-columns:1fr 1fr}.import-item .actions{grid-column:1/-1}}
+@media(max-width:520px){.data-grid{grid-template-columns:1fr}.import-item{grid-template-columns:1fr}}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
@@ -86,7 +95,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V4.1 Import verificato</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V4.2 Gestione dati</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -165,6 +174,30 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
         <button class="btn" onclick="clearTechnogym()">Pulisci</button>
       </div>
       <p class="muted" style="font-size:12px">Il riconoscimento è automatico ma va sempre controllato. Lettore V4 testato sui Wellness Report reali: composizione corporea, acqua, metabolismo, mobilità, equilibrio, mente, forza e cardio. I modelli PDF Technogym possono cambiare: con un tuo PDF campione potremo perfezionare le etichette.</p>
+    </div>
+  </section>
+
+
+  <section id="data" class="section">
+    <div class="card">
+      <div class="row"><div><h3 style="margin-bottom:4px">Gestione dati</h3>
+      <div class="muted">Controlla, elimina o ripristina le importazioni Technogym senza perdere gli atleti.</div></div></div>
+
+      <div class="data-grid">
+        <div class="data-card"><span class="muted">Atleti</span><b id="dAthletes">0</b></div>
+        <div class="data-card"><span class="muted">Valutazioni totali</span><b id="dEvaluations">0</b></div>
+        <div class="data-card"><span class="muted">Importazioni Technogym</span><b id="dImports">0</b></div>
+        <div class="data-card"><span class="muted">Ultimo backup</span><b id="dBackup" style="font-size:16px">Mai</b></div>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn gold" onclick="exportData()">Esporta backup completo</button>
+        <label class="btn">Ripristina backup<input type="file" accept=".json" hidden onchange="importData(event)"></label>
+        <button class="btn danger" onclick="deleteAllTechnogym()">Elimina tutte le importazioni Technogym</button>
+      </div>
+
+      <h3>Importazioni presenti</h3>
+      <div id="importsList" class="import-list"></div>
     </div>
   </section>
 
@@ -254,7 +287,7 @@ function cloudReady(){if(!(cloud.url&&cloud.key&&cloud.workspace)){alert("Inseri
 async function pushCloud(){if(!cloudReady())return;setCloudStatus("Caricamento...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state`,{method:"POST",headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},body:JSON.stringify({workspace_id:cloud.workspace,payload:db,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error(await r.text());setCloudStatus("Dati caricati nel cloud",true);alert("Sincronizzazione completata") }catch(e){setCloudStatus("Errore cloud");alert("Collegamento non riuscito. Controlla configurazione e tabella Supabase.\n"+e.message)}}
 async function pullCloud(){if(!cloudReady())return;setCloudStatus("Download...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state?workspace_id=eq.${encodeURIComponent(cloud.workspace)}&select=payload,updated_at`,{headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`}});if(!r.ok)throw new Error(await r.text());let rows=await r.json();if(!rows.length)return alert("Nessun archivio cloud trovato: carica prima i dati da uno dei dispositivi.");if(!confirm("Sostituire i dati di questo dispositivo con quelli del cloud?"))return;db=rows[0].payload;persist();setCloudStatus("Dati scaricati dal cloud",true);alert("Dati aggiornati") }catch(e){setCloudStatus("Errore cloud");alert("Download non riuscito.\n"+e.message)}}
 
-const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["catalog","Catalogo Test"],["settings","Impostazioni"]];
+const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["catalog","Catalogo Test"],["data","Gestione dati"],["settings","Impostazioni"]];
 function persist(){localStorage.setItem("mmpl_db",JSON.stringify(db));refreshAll()}
 function initNav(){let html=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("");nav.innerHTML=html;mobilebar.innerHTML=pages.slice(0,6).map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("")}
 function go(id,btn){document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll("nav button,.mobilebar button").forEach(x=>x.classList.toggle("active",x.textContent===pages.find(p=>p[0]===id)[1]));pageTitle.textContent=pages.find(p=>p[0]===id)[1];refreshAll()}
@@ -428,7 +461,17 @@ function exportAnalysisCsv(){
 function refreshDashboard(){kAthletes.textContent=db.athletes.length;kTests.textContent=db.evaluations.length;kCatalog.textContent=db.tests.length;kRecent.textContent=db.evaluations.length?fmt([...db.evaluations].sort((a,b)=>b.date.localeCompare(a.date))[0].date):"—";chips.innerHTML=db.tests.slice(0,12).map(t=>`<span class="chip">${t.name}</span>`).join("");drawChart()}
 function drawChart(){let c=chart,ctx=c.getContext("2d"),dpr=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);let months=[];for(let i=11;i>=0;i--){let d=new Date();d.setMonth(d.getMonth()-i);months.push({key:d.toISOString().slice(0,7),label:d.toLocaleDateString("it-IT",{month:"short"})})}let vals=months.map(m=>db.evaluations.filter(e=>e.date.startsWith(m.key)).length),max=Math.max(1,...vals);ctx.strokeStyle="#2a2c32";ctx.fillStyle="#9b9ca2";ctx.font="12px system-ui";months.forEach((m,i)=>{let x=35+i*(w-50)/11;ctx.fillText(m.label,x-10,h-12)});ctx.beginPath();vals.forEach((v,i)=>{let x=35+i*(w-50)/11,y=h-35-v*(h-60)/max;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle="#d8b25c";ctx.lineWidth=3;ctx.stroke();vals.forEach((v,i)=>{let x=35+i*(w-50)/11,y=h-35-v*(h-60)/max;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle="#f0d58b";ctx.fill()})}
 function fmt(d){return d?new Date(d+"T12:00:00").toLocaleDateString("it-IT"):"—"}
-function exportData(){let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="MM_Performance_Lab_backup_"+new Date().toISOString().slice(0,10)+".json";a.click()}
+function exportData(){
+  const stamp=new Date().toISOString();
+  localStorage.setItem("mmpl_last_backup",stamp);
+  const payload={...db,backupMeta:{createdAt:stamp,appVersion:"4.2"}};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="MM_Performance_Lab_backup_"+new Date().toISOString().slice(0,10)+".json";
+  a.click();
+  renderDataManagement();
+}
 function importData(ev){let f=ev.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);persist();alert("Backup importato")}catch(e){alert("File non valido")}};r.readAsText(f)}
 function resetApp(){if(confirm("Ripristinare i dati iniziali? Tutte le valutazioni saranno cancellate.")){db={athletes:seedAthletes,tests:seedTests,evaluations:[]};persist()}}
 
@@ -616,37 +659,35 @@ function ensureTest(name,unit){
 function saveTechnogymValues(){
   if(!tgValues.length)return alert("Non ci sono valori da salvare.");
   if(!tgAthlete.value)return alert("Seleziona un atleta.");
+
+  const importId=`TG-${tgAthlete.value}-${tgDate.value}`;
   let inserted=0,updated=0;
+
   tgValues.forEach(v=>{
     ensureTest(v.test,v.unit);
     const existing=db.evaluations.find(e=>e.athleteId===tgAthlete.value&&e.test===v.test&&e.date===tgDate.value);
     if(existing){
       existing.value=Number(v.value);
       existing.notes="Aggiornato da PDF Technogym";
+      existing.source="technogym";
+      existing.importId=importId;
       updated++;
     }else{
       db.evaluations.push({
         id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),
         athleteId:tgAthlete.value,test:v.test,date:tgDate.value,
-        value:Number(v.value),notes:"Importato da PDF Technogym"
+        value:Number(v.value),notes:"Importato da PDF Technogym",
+        source:"technogym",importId
       });
       inserted++;
     }
   });
-  persist();
 
-  const saved=db.evaluations.filter(e=>e.athleteId===tgAthlete.value&&e.date===tgDate.value);
+  persist();
+  const saved=db.evaluations.filter(e=>e.athleteId===tgAthlete.value&&e.date===tgDate.value&&e.source==="technogym");
   const strengthSaved=["Chest Press","Leg Press","Leg Extension"].filter(name=>saved.some(e=>e.test===name));
   alert(`${inserted} valori inseriti, ${updated} aggiornati.\nTest forza salvati: ${strengthSaved.join(", ")||"nessuno"}.`);
 
-  const leg=db.tests.find(t=>t.name==="Leg Press");
-  if(leg&&saved.some(e=>e.test==="Leg Press")){
-    go("analysis");
-    setTimeout(()=>{
-      analysisTest.value="Leg Press";
-      renderAnalysis();
-    },50);
-  }
   clearTechnogym();
 }
 
@@ -688,7 +729,70 @@ function openProfile(id){
   profileModal.classList.add("open");
 }
 
-function refreshAll(){renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();if(window.cloudUrl)loadCloudSettings()}
+
+function getTechnogymImports(){
+  const map={};
+  db.evaluations.forEach(e=>{
+    const isTech=e.source==="technogym"||String(e.notes||"").toLowerCase().includes("technogym");
+    if(!isTech)return;
+    const key=e.importId||`TG-${e.athleteId}-${e.date}`;
+    if(!map[key])map[key]={id:key,athleteId:e.athleteId,date:e.date,count:0};
+    map[key].count++;
+  });
+  return Object.values(map).sort((a,b)=>b.date.localeCompare(a.date));
+}
+
+function renderDataManagement(){
+  if(!window.dAthletes)return;
+  const imports=getTechnogymImports();
+  dAthletes.textContent=db.athletes.length;
+  dEvaluations.textContent=db.evaluations.length;
+  dImports.textContent=imports.length;
+
+  const last=localStorage.getItem("mmpl_last_backup");
+  dBackup.textContent=last?new Date(last).toLocaleString("it-IT"):"Mai";
+
+  importsList.innerHTML=imports.length?imports.map(item=>{
+    const a=db.athletes.find(x=>x.id===item.athleteId)||{};
+    return `<div class="import-item">
+      <div><b>${a.surname||"Atleta"} ${a.name||""}</b><div class="muted">${item.athleteId}</div></div>
+      <div><b>${fmt(item.date)}</b><div class="muted">Data test</div></div>
+      <div><b>${item.count}</b><div class="muted">Valori importati</div></div>
+      <div class="actions"><button class="btn danger" onclick="deleteTechnogymImport('${item.id}')">Elimina importazione</button></div>
+    </div>`;
+  }).join(""):'<div class="empty">Nessuna importazione Technogym presente</div>';
+}
+
+function deleteTechnogymImport(importId){
+  const imports=getTechnogymImports();
+  const item=imports.find(x=>x.id===importId);
+  if(!item)return;
+  const athlete=db.athletes.find(x=>x.id===item.athleteId);
+  const name=athlete?`${athlete.surname} ${athlete.name}`:item.athleteId;
+  if(!confirm(`Eliminare l'importazione Technogym di ${name} del ${fmt(item.date)}?`))return;
+
+  db.evaluations=db.evaluations.filter(e=>{
+    const key=e.importId||`TG-${e.athleteId}-${e.date}`;
+    const isTech=e.source==="technogym"||String(e.notes||"").toLowerCase().includes("technogym");
+    return !(isTech&&key===importId);
+  });
+  persist();
+}
+
+function deleteAllTechnogym(){
+  const imports=getTechnogymImports();
+  if(!imports.length)return alert("Non ci sono importazioni Technogym da eliminare.");
+  if(!confirm(`Eliminare tutte le ${imports.length} importazioni Technogym?\nGli atleti e le valutazioni manuali resteranno intatti.`))return;
+
+  db.evaluations=db.evaluations.filter(e=>{
+    const isTech=e.source==="technogym"||String(e.notes||"").toLowerCase().includes("technogym");
+    return !isTech;
+  });
+  persist();
+  alert("Tutte le importazioni Technogym sono state eliminate.");
+}
+
+function refreshAll(){renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();renderDataManagement();if(window.cloudUrl)loadCloudSettings()}
 initNav();refreshAll();addEventListener("resize",drawChart);
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
 </script>
