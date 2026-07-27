@@ -1,0 +1,21 @@
+MM PERFORMANCE LAB V1.1 CLOUD — GUIDA BREVE
+
+1) PUBBLICAZIONE GRATUITA
+Carica questi file su GitHub Pages, Netlify o Cloudflare Pages.
+La cartella pubblica deve contenere index.html, manifest.json e sw.js.
+
+2) INSTALLAZIONE
+Android: apri l'indirizzo con Chrome > menu > Installa app / Aggiungi a schermata Home.
+iPad/iPhone: Safari > Condividi > Aggiungi alla schermata Home.
+PC: Chrome/Edge > icona Installa nella barra degli indirizzi.
+
+3) CLOUD GRATUITO
+- Crea un progetto Supabase.
+- Apri SQL Editor e incolla supabase_schema.sql.
+- In Project Settings > API copia Project URL e anon public key.
+- Nell'app apri Impostazioni e inseriscili insieme a un codice archivio personale lungo.
+- Sul primo dispositivo premi “Carica dati nel cloud”.
+- Sugli altri dispositivi inserisci gli stessi dati e premi “Scarica dati dal cloud”.
+
+IMPORTANTE
+Questa build usa una configurazione semplice adatta all'uso personale. Non condividere URL, chiave e codice archivio. Per distribuire l'app ad altri utenti servirà aggiungere autenticazione personale e regole di sicurezza più forti.
