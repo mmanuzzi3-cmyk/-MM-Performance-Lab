@@ -1,4 +1,4 @@
-const CACHE='mmpl-v3-team-report';
+const CACHE='mmpl-v3-2-visual-pdf-reader';
 const ASSETS=['./','./index.html','./manifest.json'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x))))])));

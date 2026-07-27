@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab V3.0",
+  "name": "MM Performance Lab V3.2",
   "short_name": "MM Lab",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#08090a",
   "theme_color": "#0b0b0c",
-  "description": "Classifiche, grafici squadra, fasce automatiche e report PDF"
+  "description": "Lettore PDF Technogym corretto con ricostruzione visuale delle righe"
 }
