@@ -50,7 +50,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V2.1 Corretta</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V2.2 PDF corretto</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -110,7 +110,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
         <button class="btn gold" onclick="saveTechnogymValues()">Salva valori riconosciuti</button>
         <button class="btn" onclick="clearTechnogym()">Pulisci</button>
       </div>
-      <p class="muted" style="font-size:12px">Il riconoscimento è automatico ma va sempre controllato. I modelli PDF Technogym possono cambiare: con un tuo PDF campione potremo perfezionare le etichette.</p>
+      <p class="muted" style="font-size:12px">Il riconoscimento è automatico ma va sempre controllato. La massa magra viene salvata in kg usando il valore FFM tra parentesi. I modelli PDF Technogym possono cambiare: con un tuo PDF campione potremo perfezionare le etichette.</p>
     </div>
   </section>
 
@@ -263,18 +263,18 @@ function detectTechnogymValues(text){
     {test:"Peso", unit:"kg", re:/(?:peso|weight)\s*[:\-]?\s*(\d{2,3}(?:[.,]\d+)?)/i},
     {test:"BMI", unit:"kg/m²", re:/(?:bmi|indice di massa corporea)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i},
     {test:"Massa grassa", unit:"%", re:/(?:massa grassa|body fat|fat mass)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i},
-    {test:"Massa magra", unit:"kg", re:/(?:massa magra|lean mass|fat free mass)\s*[:\-]?\s*(\d{2,3}(?:[.,]\d+)?)/i},
+    {test:"Massa magra", unit:"kg", group:2, re:/massa\s+magra\s*\(FFM\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%[\s\S]{0,140}?\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i},
     {test:"Massa muscolare", unit:"kg", re:/(?:massa muscolare|muscle mass|skeletal muscle)\s*[:\-]?\s*(\d{2,3}(?:[.,]\d+)?)/i},
     {test:"Acqua corporea", unit:"%", re:/(?:acqua corporea|body water|total body water)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i},
     {test:"Metabolismo basale", unit:"kcal", re:/(?:metabolismo basale|basal metabolic rate|bmr)\s*[:\-]?\s*(\d{3,4})/i},
     {test:"Grasso viscerale", unit:"livello", re:/(?:grasso viscerale|visceral fat)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i},
     {test:"Età metabolica", unit:"anni", re:/(?:età metabolica|metabolic age)\s*[:\-]?\s*(\d{1,3})/i},
-    {test:"VO₂ Max", unit:"ml/kg/min", re:/(?:vo2\s*max|vo₂\s*max)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i}
+    {test:"VO₂ Max", unit:"ml/kg/min", re:/(?:VO2|VO₂)\s*Max[\s\S]{0,50}?(\d{1,2}(?:[.,]\d+)?)\s*ml\s*\/\s*min\s*\/\s*kg/i}
   ];
   tgValues = [];
   patterns.forEach(p=>{
     const m = clean.match(p.re);
-    if(m) tgValues.push({...p, value:Number(m[1].replace(",","."))});
+    if(m){const raw=m[p.group||1];tgValues.push({...p, value:Number(raw.replace(",","."))});}
   });
   tgStatus.textContent = tgValues.length
     ? `Riconosciuti ${tgValues.length} valori. Controllali prima di salvarli.`
