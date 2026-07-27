@@ -50,7 +50,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V2.0 Technogym</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V2.1 Corretta</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -183,16 +183,22 @@ const seedTests = [
 {name:"Massa magra",unit:"kg",direction:"high",category:"Composizione"},
 {name:"Massa grassa",unit:"%",direction:"low",category:"Composizione"}
 ];
-let db = JSON.parse(localStorage.getItem("mmpl_db") || "null") || {athletes:seedAthletes,tests:seedTests,evaluations:[]};
+let db;
+try { db = JSON.parse(localStorage.getItem("mmpl_db") || "null"); } catch(e) { db = null; }
+if(!db || !Array.isArray(db.athletes) || !Array.isArray(db.tests) || !Array.isArray(db.evaluations)){
+  db={athletes:seedAthletes,tests:seedTests,evaluations:[]};
+}
+if(db.athletes.length===0 && db.tests.length===0 && db.evaluations.length===0){
+  db={athletes:seedAthletes,tests:seedTests,evaluations:[]};
+  localStorage.setItem("mmpl_db",JSON.stringify(db));
+}
 const cloud = JSON.parse(localStorage.getItem("mmpl_cloud")||"null") || {url:"",key:"",workspace:""};
 function loadCloudSettings(){cloudUrl.value=cloud.url||"";cloudKey.value=cloud.key||"";workspaceId.value=cloud.workspace||"";setCloudStatus(cloud.url&&cloud.key&&cloud.workspace?"Cloud configurato":"Modalità locale")}
 function setCloudStatus(msg,good=false){if(!window.cloudStatus)return;cloudStatus.textContent=msg;cloudStatus.style.color=good?"#64c987":"#f0d58b"}
 function saveCloudSettings(){cloud.url=cloudUrl.value.trim().replace(/\/$/,"");cloud.key=cloudKey.value.trim();cloud.workspace=workspaceId.value.trim();localStorage.setItem("mmpl_cloud",JSON.stringify(cloud));setCloudStatus(cloud.url&&cloud.key&&cloud.workspace?"Cloud configurato":"Dati incompleti",!!(cloud.url&&cloud.key&&cloud.workspace));alert("Impostazioni cloud salvate su questo dispositivo") }
 function cloudReady(){if(!(cloud.url&&cloud.key&&cloud.workspace)){alert("Inserisci Project URL, Anon key e codice archivio");return false}return true}
-async function pushCloud(){if(!cloudReady())return;setCloudStatus("Caricamento...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state`,{method:"POST",headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},body:JSON.stringify({workspace_id:cloud.workspace,payload:db,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error(await r.text());setCloudStatus("Dati caricati nel cloud",true);alert("Sincronizzazione completata") }catch(e){setCloudStatus("Errore cloud");alert("Collegamento non riuscito. Controlla configurazione e tabella Supabase.
-"+e.message)}}
-async function pullCloud(){if(!cloudReady())return;setCloudStatus("Download...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state?workspace_id=eq.${encodeURIComponent(cloud.workspace)}&select=payload,updated_at`,{headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`}});if(!r.ok)throw new Error(await r.text());let rows=await r.json();if(!rows.length)return alert("Nessun archivio cloud trovato: carica prima i dati da uno dei dispositivi.");if(!confirm("Sostituire i dati di questo dispositivo con quelli del cloud?"))return;db=rows[0].payload;persist();setCloudStatus("Dati scaricati dal cloud",true);alert("Dati aggiornati") }catch(e){setCloudStatus("Errore cloud");alert("Download non riuscito.
-"+e.message)}}
+async function pushCloud(){if(!cloudReady())return;setCloudStatus("Caricamento...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state`,{method:"POST",headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},body:JSON.stringify({workspace_id:cloud.workspace,payload:db,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error(await r.text());setCloudStatus("Dati caricati nel cloud",true);alert("Sincronizzazione completata") }catch(e){setCloudStatus("Errore cloud");alert("Collegamento non riuscito. Controlla configurazione e tabella Supabase.\n"+e.message)}}
+async function pullCloud(){if(!cloudReady())return;setCloudStatus("Download...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state?workspace_id=eq.${encodeURIComponent(cloud.workspace)}&select=payload,updated_at`,{headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`}});if(!r.ok)throw new Error(await r.text());let rows=await r.json();if(!rows.length)return alert("Nessun archivio cloud trovato: carica prima i dati da uno dei dispositivi.");if(!confirm("Sostituire i dati di questo dispositivo con quelli del cloud?"))return;db=rows[0].payload;persist();setCloudStatus("Dati scaricati dal cloud",true);alert("Dati aggiornati") }catch(e){setCloudStatus("Errore cloud");alert("Download non riuscito.\n"+e.message)}}
 
 const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["catalog","Catalogo Test"],["settings","Impostazioni"]];
 function persist(){localStorage.setItem("mmpl_db",JSON.stringify(db));refreshAll()}
