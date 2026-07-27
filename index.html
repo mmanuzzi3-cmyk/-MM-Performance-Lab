@@ -86,7 +86,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V3.2 Lettore corretto</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V4.0 Stabile</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -164,7 +164,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
         <button class="btn gold" onclick="saveTechnogymValues()">Salva valori riconosciuti</button>
         <button class="btn" onclick="clearTechnogym()">Pulisci</button>
       </div>
-      <p class="muted" style="font-size:12px">Il riconoscimento è automatico ma va sempre controllato. Il testo viene ricostruito nell’ordine visivo della pagina prima di riconoscere tutti i parametri. I modelli PDF Technogym possono cambiare: con un tuo PDF campione potremo perfezionare le etichette.</p>
+      <p class="muted" style="font-size:12px">Il riconoscimento è automatico ma va sempre controllato. Lettore V4 testato sui Wellness Report reali: composizione corporea, acqua, metabolismo, mobilità, equilibrio, mente, forza e cardio. I modelli PDF Technogym possono cambiare: con un tuo PDF campione potremo perfezionare le etichette.</p>
     </div>
   </section>
 
@@ -452,118 +452,138 @@ async function readTechnogymPdf(ev){
     const pdf = await pdfjs.getDocument({data:bytes}).promise;
     const pages=[];
     for(let p=1;p<=pdf.numPages;p++){
-      const page = await pdf.getPage(p);
-      const content = await page.getTextContent();
-      const items=content.items
-        .filter(x=>x.str && x.str.trim())
-        .map(x=>({text:x.str.trim(),x:x.transform[4],y:x.transform[5]}))
-        .sort((a,b)=>Math.abs(b.y-a.y)>3?b.y-a.y:a.x-b.x);
-
-      const lines=[];
-      for(const item of items){
-        let line=lines.find(l=>Math.abs(l.y-item.y)<=3);
-        if(!line){line={y:item.y,items:[]};lines.push(line);}
-        line.items.push(item);
-      }
-      lines.sort((a,b)=>b.y-a.y);
-      const pageText=lines.map(l=>l.items.sort((a,b)=>a.x-b.x).map(i=>i.text).join(" ")).join("\n");
+      const page=await pdf.getPage(p);
+      const content=await page.getTextContent();
+      const pageText=content.items.map(x=>x.str||"").join(" ").replace(/\s+/g," ").trim();
       pages.push(pageText);
     }
-    detectTechnogymValues(pages.join("\n\n---PAGINA---\n\n"));
+    detectTechnogymValues(pages);
   }catch(err){
     tgStatus.textContent = "Non riesco a leggere questo PDF. Verifica la connessione internet e riprova.";
     console.error(err);
   }
 }
 
-function detectTechnogymValues(text){
-  const clean=text
-    .replace(/\u00a0/g," ")
-    .replace(/[ ]+/g," ")
-    .replace(/\n[ ]+/g,"\n");
+function detectTechnogymValues(pages){
+  const normalized=(pages||[]).map(p=>(p||"").replace(/\u00a0/g," ").replace(/\s+/g," ").trim());
+  const pageWith=marker=>normalized.find(p=>p.toLowerCase().includes(marker.toLowerCase()))||"";
+  const values=[],added=new Set();
+  const toNum=v=>Number(String(v).replace(",","."));
 
-  const flat=clean.replace(/\s+/g," ");
-  const values=[];
-  const added=new Set();
-
-  const num=s=>Number(String(s).replace(",","."));
   function add(test,unit,value){
-    if(value===undefined||value===null||value===""||Number.isNaN(num(value))||added.has(test))return;
-    values.push({test,unit,value:num(value)});
+    if(value===null||value===undefined||value===""||added.has(test))return;
+    const number=toNum(value);
+    if(Number.isNaN(number))return;
+    values.push({test,unit,value:number});
     added.add(test);
   }
-  function find(re,group=1,source=flat){
-    const m=source.match(re);
+  function capture(source,re,group=1){
+    const m=(source||"").match(re);
     return m?m[group]:null;
   }
 
-  // Dati generali e composizione corporea
-  add("Wellness Age","anni",find(/ANDAMENTO\s+WELLNESS\s+AGE[\s\S]{0,180}?(\d{1,3})\s*ANNI/i));
-  add("Peso","kg",find(/Analisi\s+del\s+peso[\s\S]{0,260}?\bPeso\s+(\d{2,3}(?:[.,]\d+)?)\s*kg/i));
-  add("BMI","kg/m²",find(/\bBMI\s+(\d{1,2}(?:[.,]\d+)?)(?:\s|$)/i));
+  // Pagina riepilogo / Wellness Age
+  const summary=pageWith("ANDAMENTO WELLNESS AGE");
+  add("Wellness Age","anni",capture(summary,/Ultimo aggiornamento:.*?(\d{1,3})\s+ANNI/i));
 
-  let m=flat.match(/Massa\s+grassa\s*\(BFM\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i);
+  // Pagina composizione corporea
+  const weight=pageWith("Analisi del peso");
+  add("Peso","kg",capture(weight,/\bPeso\s+(\d{2,3}(?:[.,]\d+)?)\s*kg/i));
+  add("BMI","kg/m²",capture(weight,/\bBMI\s+(\d{1,2}(?:[.,]\d+)?)/i));
+
+  let m=weight.match(/Massa grassa\s*\(BFM\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg/i);
   if(m){add("Massa grassa","%",m[1]);add("Massa grassa kg","kg",m[2]);}
 
-  m=flat.match(/Massa\s+magra\s*\(FFM\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i);
+  m=weight.match(/Massa magra\s*\(FFM\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg/i);
   if(m){add("Massa magra %","%",m[1]);add("Massa magra","kg",m[2]);}
 
-  m=flat.match(/Contenuto\s+minerale\s+osseo[\s\S]{0,40}?\(BMC\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i);
-  if(m){add("Contenuto minerale osseo %","%",m[1]);add("Contenuto minerale osseo","kg",m[2]);}
+  // Pagina massa magra
+  const lean=pageWith("Analisi della massa magra");
+  const leanTests=[
+    ["Contenuto minerale osseo","BMC","Contenuto minerale osseo %","Contenuto minerale osseo"],
+    ["Massa magra dei tessuti molli","SLM","Massa magra tessuti molli %","Massa magra tessuti molli"],
+    ["Massa muscolare scheletrica","SMM","Massa muscolare scheletrica %","Massa muscolare scheletrica"]
+  ];
+  leanTests.forEach(([label,abbr,pctName,kgName])=>{
+    const flexible=label.split(" ").join("\\s+");
+    const re=new RegExp(flexible+"\\s*\\("+abbr+"\\)\\s*(\\d{1,3}(?:[.,]\\d+)?)\\s*%\\s*\\(\\s*(\\d{1,3}(?:[.,]\\d+)?)\\s*kg","i");
+    const x=lean.match(re);
+    if(x){add(pctName,"%",x[1]);add(kgName,"kg",x[2]);}
+  });
 
-  m=flat.match(/Massa\s+magra\s+dei\s+tessuti\s+molli\s*\(SLM\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i);
-  if(m){add("Massa magra tessuti molli %","%",m[1]);add("Massa magra tessuti molli","kg",m[2]);}
+  // Pagina acqua
+  const water=pageWith("Analisi dell’acqua")||pageWith("Analisi dell'acqua");
+  [
+    ["Acqua corporea totale","TBW","Acqua corporea totale","Acqua corporea totale kg"],
+    ["Acqua extracellulare","ECW","Acqua extracellulare","Acqua extracellulare kg"],
+    ["Acqua intracellulare","ICW","Acqua intracellulare","Acqua intracellulare kg"]
+  ].forEach(([label,abbr,pctName,kgName])=>{
+    const flexible=label.split(" ").join("\\s+");
+    const re=new RegExp(flexible+"\\s*\\("+abbr+"\\)\\s*(\\d{1,3}(?:[.,]\\d+)?)\\s*%\\s*\\(\\s*(\\d{1,3}(?:[.,]\\d+)?)\\s*kg","i");
+    const x=water.match(re);
+    if(x){add(pctName,"%",x[1]);add(kgName,"kg",x[2]);}
+  });
 
-  m=flat.match(/Massa\s+muscolare\s+scheletrica\s*\(SMM\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i);
-  if(m){add("Massa muscolare scheletrica %","%",m[1]);add("Massa muscolare scheletrica","kg",m[2]);}
+  // Pagina metabolismo
+  const metabolism=pageWith("Analisi del metabolismo");
+  add("Metabolismo basale","kcal",capture(metabolism,/Metabolismo basale\s*\(BMR\)\s*(\d{3,4})\s*kcal/i));
+  add("Angolo di fase","°",capture(metabolism,/Angolo di fase\s*(\d{1,2}(?:[.,]\d+)?)\s*°/i));
 
-  // Acqua
-  m=flat.match(/Acqua\s+corporea\s+totale\s*\(TBW\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i);
-  if(m){add("Acqua corporea totale","%",m[1]);add("Acqua corporea totale kg","kg",m[2]);}
+  // Pagina mobilità
+  const mobility=pageWith("Mobilità IL TUO PUNTEGGIO");
+  [
+    ["Collo","Mobilità collo sinistro","Mobilità collo destro"],
+    ["Spalle","Mobilità spalla sinistra","Mobilità spalla destra"],
+    ["Caviglie","Mobilità caviglia sinistra","Mobilità caviglia destra"]
+  ].forEach(([label,leftName,rightName])=>{
+    const re=new RegExp(label+"\\s+\\d{1,2}\\s+\\w+\\s+\\d{4}\\s+S\\s*(\\d{1,3}(?:[.,]\\d+)?)\\s*°.*?D\\s*(\\d{1,3}(?:[.,]\\d+)?)\\s*°","i");
+    const x=mobility.match(re);
+    if(x){add(leftName,"°",x[1]);add(rightName,"°",x[2]);}
+  });
+  add("Mobilità anche","°",capture(mobility,/Anche\s+\d{1,2}\s+\w+\s+\d{4}\s+(\d{1,3}(?:[.,]\d+)?)\s*°/i));
 
-  m=flat.match(/Acqua\s+extracellulare\s*\(ECW\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i);
-  if(m){add("Acqua extracellulare","%",m[1]);add("Acqua extracellulare kg","kg",m[2]);}
-
-  m=flat.match(/Acqua\s+intracellulare\s*\(ICW\)\s*(\d{1,3}(?:[.,]\d+)?)\s*%\s*\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg\s*\)/i);
-  if(m){add("Acqua intracellulare","%",m[1]);add("Acqua intracellulare kg","kg",m[2]);}
-
-  // Metabolismo
-  add("Metabolismo basale","kcal",find(/Metabolismo\s+basale\s*\(BMR\)\s*(\d{3,4})\s*kcal/i));
-  add("Angolo di fase","°",find(/Angolo\s+di\s+fase\s*(\d{1,2}(?:[.,]\d+)?)\s*°/i));
-
-  // Mobilità: limita la ricerca alla pagina/sezione mobilità
-  const mobility=(flat.match(/Mobilità\s+IL\s+TUO\s+PUNTEGGIO[\s\S]*?(?=Equilibrio\s+IL\s+TUO\s+PUNTEGGIO|---PAGINA---)/i)||[])[0]||"";
-  m=mobility.match(/Collo[\s\S]{0,140}?S\s+(\d{1,3}(?:[.,]\d+)?)\s*°[\s\S]{0,80}?D\s+(\d{1,3}(?:[.,]\d+)?)\s*°/i);
-  if(m){add("Mobilità collo sinistro","°",m[1]);add("Mobilità collo destro","°",m[2]);}
-  m=mobility.match(/Spalle[\s\S]{0,140}?S\s+(\d{1,3}(?:[.,]\d+)?)\s*°[\s\S]{0,80}?D\s+(\d{1,3}(?:[.,]\d+)?)\s*°/i);
-  if(m){add("Mobilità spalla sinistra","°",m[1]);add("Mobilità spalla destra","°",m[2]);}
-  add("Mobilità anche","°",find(/Anche[\s\S]{0,100}?(\d{1,3}(?:[.,]\d+)?)\s*°/i,1,mobility));
-  m=mobility.match(/Caviglie[\s\S]{0,140}?S\s+(\d{1,3}(?:[.,]\d+)?)\s*°[\s\S]{0,80}?D\s+(\d{1,3}(?:[.,]\d+)?)\s*°/i);
-  if(m){add("Mobilità caviglia sinistra","°",m[1]);add("Mobilità caviglia destra","°",m[2]);}
-
-  // Equilibrio
-  const balance=(flat.match(/Equilibrio\s+IL\s+TUO\s+PUNTEGGIO[\s\S]*?(?=Mente\s+IL\s+TUO\s+PUNTEGGIO|---PAGINA---)/i)||[])[0]||"";
-  m=balance.match(/Equilibrio[\s\S]{0,160}?S\s+(\d{1,3}(?:[.,]\d+)?)\s*sec[\s\S]{0,100}?D\s+(\d{1,3}(?:[.,]\d+)?)\s*sec/i);
+  // Pagina equilibrio
+  const balance=pageWith("Equilibrio IL TUO PUNTEGGIO");
+  m=balance.match(/Equilibrio\s+\d{1,2}\s+\w+\s+\d{4}\s+S\s*(\d{1,3}(?:[.,]\d+)?)\s*sec.*?D\s*(\d{1,3}(?:[.,]\d+)?)\s*sec/i);
   if(m){add("Equilibrio sinistro","s",m[1]);add("Equilibrio destro","s",m[2]);}
 
-  // Mente
-  const mind=(flat.match(/Mente\s+IL\s+TUO\s+PUNTEGGIO[\s\S]*?(?=Forza\s+IL\s+TUO\s+PUNTEGGIO|---PAGINA---)/i)||[])[0]||"";
-  add("Memoria","punteggio",find(/Memoria[\s\S]{0,80}?\b(\d{1,3})\b/i,1,mind));
-  add("Attenzione","ms",find(/Attenzione[\s\S]{0,80}?(\d{1,4})\s*ms/i,1,mind));
-  add("Velocità mentale","ms",find(/Velocità\s+mentale[\s\S]{0,80}?(\d{1,4})\s*ms/i,1,mind));
+  // Pagina mente
+  const mind=pageWith("Mente IL TUO PUNTEGGIO");
+  add("Memoria","punteggio",capture(mind,/Memoria\s+\d{1,2}\s+\w+\s+\d{4}\s+(\d{1,3})\b/i));
+  add("Attenzione","ms",capture(mind,/Attenzione\s+\d{1,2}\s+\w+\s+\d{4}\s+(\d{1,4})\s*ms/i));
+  add("Velocità mentale","ms",capture(mind,/Velocità mentale\s+\d{1,2}\s+\w+\s+\d{4}\s+(\d{1,4})\s*ms/i));
 
-  // Forza
-  const strength=(flat.match(/Forza\s+IL\s+TUO\s+PUNTEGGIO[\s\S]*?(?=Cardio\s+IL\s+TUO\s+PUNTEGGIO|---PAGINA---)/i)||[])[0]||"";
-  add("Chest Press","kg",find(/CHEST\s+PRESS\s+ARTIS[\s\S]{0,100}?(\d{1,3}(?:[.,]\d+)?)\s*kg/i,1,strength));
-  add("Leg Press","kg",find(/LEG\s+PRESS\s+ARTIS[\s\S]{0,100}?(\d{1,3}(?:[.,]\d+)?)\s*kg/i,1,strength));
-  add("Leg Extension","kg",find(/LEG\s+EXTENSION\s+ARTIS[\s\S]{0,100}?(\d{1,3}(?:[.,]\d+)?)\s*kg/i,1,strength));
+  // Pagina forza
+  const strength=pageWith("Forza IL TUO PUNTEGGIO");
+  add("Chest Press","kg",capture(strength,/CHEST PRESS ARTIS.*?(\d{1,3}(?:[.,]\d+)?)\s*kg/i));
+  add("Leg Press","kg",capture(strength,/LEG PRESS ARTIS.*?(\d{1,3}(?:[.,]\d+)?)\s*kg/i));
+  add("Leg Extension","kg",capture(strength,/LEG EXTENSION ARTIS.*?(\d{1,3}(?:[.,]\d+)?)\s*kg/i));
 
-  // Cardio
-  add("VO₂ Max","ml/kg/min",find(/(?:VO2|VO₂)\s*Max[\s\S]{0,100}?(\d{1,2}(?:[.,]\d+)?)\s*ml\s*\/\s*min\s*\/\s*Kg/i));
+  // Pagina cardio
+  const cardio=pageWith("Cardio IL TUO PUNTEGGIO");
+  add("VO₂ Max","ml/kg/min",capture(cardio,/VO2 Max.*?(\d{1,2}(?:[.,]\d+)?)\s*ml\s*\/\s*min\s*\/\s*Kg/i));
+
+  // Nome e data per aiutare la selezione automatica.
+  const header=normalized.find(p=>/Nome:\s+/i.test(p))||"";
+  const athleteName=capture(header,/Nome:\s*([A-Za-zÀ-ÿ' -]+?)\s+Sesso:/i);
+  const dateRaw=capture(summary,/Ultimo aggiornamento:\s*(\d{1,2})\s+([a-zà]+)\s+(\d{4})/i,0);
+  if(dateRaw){
+    const dm=dateRaw.match(/(\d{1,2})\s+([a-zà]+)\s+(\d{4})/i);
+    const months={gen:1,feb:2,mar:3,apr:4,mag:5,giu:6,lug:7,ago:8,set:9,ott:10,nov:11,dic:12};
+    if(dm){
+      const mon=months[dm[2].slice(0,3).toLowerCase()];
+      if(mon) tgDate.value=`${dm[3]}-${String(mon).padStart(2,"0")}-${String(dm[1]).padStart(2,"0")}`;
+    }
+  }
+  if(athleteName){
+    const target=athleteName.toLowerCase().replace(/\s+/g," ").trim();
+    const match=db.athletes.find(a=>(`${a.name} ${a.surname}`.toLowerCase()===target)||(`${a.surname} ${a.name}`.toLowerCase()===target));
+    if(match) tgAthlete.value=match.id;
+  }
 
   tgValues=values;
   tgStatus.textContent=tgValues.length
-    ? `Riconosciuti ${tgValues.length} valori. Controllali prima di salvarli.`
+    ? `Riconosciuti ${tgValues.length} valori dal Wellness Report. Controllali prima di salvarli.`
     : "Nessun valore riconosciuto automaticamente.";
   tgDetected.innerHTML=tgValues.map((v,i)=>`
     <div class="field">
@@ -584,21 +604,30 @@ function ensureTest(name,unit){
 }
 
 function saveTechnogymValues(){
-  if(!tgValues.length) return alert("Non ci sono valori da salvare.");
-  if(!tgAthlete.value) return alert("Seleziona un atleta.");
+  if(!tgValues.length)return alert("Non ci sono valori da salvare.");
+  if(!tgAthlete.value)return alert("Seleziona un atleta.");
+  let inserted=0,updated=0;
   tgValues.forEach(v=>{
     ensureTest(v.test,v.unit);
-    db.evaluations.push({
-      id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),
-      athleteId:tgAthlete.value,
-      test:v.test,
-      date:tgDate.value,
-      value:Number(v.value),
-      notes:"Importato da PDF Technogym"
-    });
+    const existing=db.evaluations.find(e=>e.athleteId===tgAthlete.value&&e.test===v.test&&e.date===tgDate.value);
+    if(existing){
+      existing.value=Number(v.value);
+      existing.notes="Aggiornato da PDF Technogym";
+      updated++;
+    }else{
+      db.evaluations.push({
+        id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),
+        athleteId:tgAthlete.value,
+        test:v.test,
+        date:tgDate.value,
+        value:Number(v.value),
+        notes:"Importato da PDF Technogym"
+      });
+      inserted++;
+    }
   });
   persist();
-  alert(`${tgValues.length} valori salvati nella scheda atleta.`);
+  alert(`${inserted} valori inseriti e ${updated} aggiornati nella scheda atleta.`);
   clearTechnogym();
 }
 

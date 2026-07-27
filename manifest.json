@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab V3.2",
+  "name": "MM Performance Lab V4.0",
   "short_name": "MM Lab",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#08090a",
   "theme_color": "#0b0b0c",
-  "description": "Lettore PDF Technogym corretto con ricostruzione visuale delle righe"
+  "description": "Versione stabile con importazione completa dei Wellness Report Technogym"
 }
