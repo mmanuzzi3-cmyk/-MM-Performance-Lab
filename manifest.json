@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab",
+  "name": "MM Performance Lab V2",
   "short_name": "MM Lab",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#08090a",
   "theme_color": "#0b0b0c",
-  "description": "Gestionale per test e monitoraggio atleti"
+  "description": "Gestionale per test, PDF Technogym e monitoraggio atleti"
 }

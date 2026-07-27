@@ -30,7 +30,18 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
 .mobilebar{display:none}
 @media(max-width:900px){.app{grid-template-columns:1fr}aside{display:none}main{padding:18px 14px 82px}.grid{grid-template-columns:repeat(2,1fr)}.mobilebar{display:flex;position:fixed;left:0;right:0;bottom:0;background:#101114;border-top:1px solid var(--line);z-index:4;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom))}.mobilebar button{background:none;border:0;color:var(--muted);font-size:11px;padding:8px}.mobilebar button.active{color:var(--gold2)}}
 @media(max-width:560px){.grid,.formgrid{grid-template-columns:1fr}.top h2{font-size:23px}th:nth-child(4),td:nth-child(4){display:none}}
+
+.importbox{border:1px dashed #5b4d2d;border-radius:14px;padding:20px;background:#101114}
+.dropzone{padding:28px;text-align:center;border:2px dashed #3a3c44;border-radius:14px;background:#0c0d10}
+.detected{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.detected .field{background:#111216;border:1px solid var(--line);border-radius:10px;padding:10px}
+.statusline{margin-top:12px;padding:10px 12px;border-radius:10px;background:#17191e;color:var(--muted)}
+.profile-btn{color:var(--gold2);border-color:#584a29}
+@media(max-width:800px){.detected{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.detected{grid-template-columns:1fr}}
+
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
 <body>
 <div class="app">
@@ -39,7 +50,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V1.0 Tablet</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V2.0 Technogym</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -76,6 +87,31 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <section id="catalog" class="section">
     <div class="toolbar"><button class="btn gold" onclick="openTest()">+ Aggiungi test</button></div>
     <div id="catalogTable"></div>
+  </section>
+
+
+  <section id="technogym" class="section">
+    <div class="card">
+      <div class="row"><div><h3 style="margin-bottom:4px">Importa PDF Technogym</h3>
+      <div class="muted">Carica il report, controlla i valori riconosciuti e salvali nell’atleta.</div></div></div>
+      <div style="height:14px"></div>
+      <div class="formgrid">
+        <div class="field"><label>Atleta</label><select id="tgAthlete"></select></div>
+        <div class="field"><label>Data test</label><input id="tgDate" type="date"></div>
+      </div>
+      <div style="height:14px"></div>
+      <div class="dropzone">
+        <input id="tgPdf" type="file" accept="application/pdf" onchange="readTechnogymPdf(event)">
+        <p class="muted">Seleziona un PDF esportato da Technogym.</p>
+      </div>
+      <div id="tgStatus" class="statusline">Nessun PDF caricato.</div>
+      <div id="tgDetected" class="detected"></div>
+      <div class="toolbar" style="margin-top:16px">
+        <button class="btn gold" onclick="saveTechnogymValues()">Salva valori riconosciuti</button>
+        <button class="btn" onclick="clearTechnogym()">Pulisci</button>
+      </div>
+      <p class="muted" style="font-size:12px">Il riconoscimento è automatico ma va sempre controllato. I modelli PDF Technogym possono cambiare: con un tuo PDF campione potremo perfezionare le etichette.</p>
+    </div>
   </section>
 
   <section id="settings" class="section">
@@ -124,6 +160,13 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
 </div><div class="toolbar" style="margin-top:18px"><button class="btn gold" onclick="saveTest()">Salva test</button></div>
 </div></div>
 
+
+<div class="modal" id="profileModal"><div class="modalbox" style="width:min(900px,100%)">
+<div class="row"><h3 id="profileTitle">Scheda atleta</h3><span class="spacer"></span><button class="btn" onclick="closeModal('profileModal')">✕</button></div>
+<div id="profileContent"></div>
+<div class="toolbar" style="margin-top:18px"><button class="btn gold" onclick="window.print()">Stampa / Salva PDF</button></div>
+</div></div>
+
 <script>
 const seedAthletes = [{"id": "ATL-001", "name": "Nicola", "surname": "Spinelli", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-002", "name": "Jari", "surname": "Vincenzi", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-003", "name": "Mattia", "surname": "Manuzzi", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-004", "name": "Elia", "surname": "Abbondanza", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-005", "name": "Massimo", "surname": "Mirra", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-006", "name": "Matteo", "surname": "Fabbri", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-007", "name": "Illiasse", "surname": "Akrab", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-008", "name": "Alex", "surname": "Vandi", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-009", "name": "Achraf", "surname": "Saadane", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-010", "name": "Edoardo", "surname": "Donati", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-011", "name": "Giacomo", "surname": "Giorgetti", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-012", "name": "Daniele", "surname": "Garavelli", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-013", "name": "Omar", "surname": "Raziki", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-014", "name": "Matteo", "surname": "Bianchi", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-015", "name": "Djily", "surname": "Sabara", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-016", "name": "Klaidi", "surname": "Cllini", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-017", "name": "Artjon", "surname": "Toka", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-018", "name": "Giacomo", "surname": "Landini", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-019", "name": "Alberto", "surname": "Cesarini", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-020", "name": "Antonio", "surname": "Esposito", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-021", "name": "Francesco", "surname": "Giampaoli", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-022", "name": "Matteo", "surname": "Vincenzi", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-023", "name": "Stefano", "surname": "Avanzolini", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-024", "name": "Filippo", "surname": "Bruschi", "birth": "", "sport": "Calcio", "category": "Prima squadra"}, {"id": "ATL-025", "name": "Mattia", "surname": "Montanari", "birth": "", "sport": "Calcio", "category": "Prima squadra"}];
 const seedTests = [
@@ -146,18 +189,20 @@ function loadCloudSettings(){cloudUrl.value=cloud.url||"";cloudKey.value=cloud.k
 function setCloudStatus(msg,good=false){if(!window.cloudStatus)return;cloudStatus.textContent=msg;cloudStatus.style.color=good?"#64c987":"#f0d58b"}
 function saveCloudSettings(){cloud.url=cloudUrl.value.trim().replace(/\/$/,"");cloud.key=cloudKey.value.trim();cloud.workspace=workspaceId.value.trim();localStorage.setItem("mmpl_cloud",JSON.stringify(cloud));setCloudStatus(cloud.url&&cloud.key&&cloud.workspace?"Cloud configurato":"Dati incompleti",!!(cloud.url&&cloud.key&&cloud.workspace));alert("Impostazioni cloud salvate su questo dispositivo") }
 function cloudReady(){if(!(cloud.url&&cloud.key&&cloud.workspace)){alert("Inserisci Project URL, Anon key e codice archivio");return false}return true}
-async function pushCloud(){if(!cloudReady())return;setCloudStatus("Caricamento...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state`,{method:"POST",headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},body:JSON.stringify({workspace_id:cloud.workspace,payload:db,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error(await r.text());setCloudStatus("Dati caricati nel cloud",true);alert("Sincronizzazione completata") }catch(e){setCloudStatus("Errore cloud");alert("Collegamento non riuscito. Controlla configurazione e tabella Supabase.\n"+e.message)}}
-async function pullCloud(){if(!cloudReady())return;setCloudStatus("Download...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state?workspace_id=eq.${encodeURIComponent(cloud.workspace)}&select=payload,updated_at`,{headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`}});if(!r.ok)throw new Error(await r.text());let rows=await r.json();if(!rows.length)return alert("Nessun archivio cloud trovato: carica prima i dati da uno dei dispositivi.");if(!confirm("Sostituire i dati di questo dispositivo con quelli del cloud?"))return;db=rows[0].payload;persist();setCloudStatus("Dati scaricati dal cloud",true);alert("Dati aggiornati") }catch(e){setCloudStatus("Errore cloud");alert("Download non riuscito.\n"+e.message)}}
+async function pushCloud(){if(!cloudReady())return;setCloudStatus("Caricamento...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state`,{method:"POST",headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},body:JSON.stringify({workspace_id:cloud.workspace,payload:db,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error(await r.text());setCloudStatus("Dati caricati nel cloud",true);alert("Sincronizzazione completata") }catch(e){setCloudStatus("Errore cloud");alert("Collegamento non riuscito. Controlla configurazione e tabella Supabase.
+"+e.message)}}
+async function pullCloud(){if(!cloudReady())return;setCloudStatus("Download...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state?workspace_id=eq.${encodeURIComponent(cloud.workspace)}&select=payload,updated_at`,{headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`}});if(!r.ok)throw new Error(await r.text());let rows=await r.json();if(!rows.length)return alert("Nessun archivio cloud trovato: carica prima i dati da uno dei dispositivi.");if(!confirm("Sostituire i dati di questo dispositivo con quelli del cloud?"))return;db=rows[0].payload;persist();setCloudStatus("Dati scaricati dal cloud",true);alert("Dati aggiornati") }catch(e){setCloudStatus("Errore cloud");alert("Download non riuscito.
+"+e.message)}}
 
-const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["catalog","Catalogo Test"],["settings","Impostazioni"]];
+const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["catalog","Catalogo Test"],["settings","Impostazioni"]];
 function persist(){localStorage.setItem("mmpl_db",JSON.stringify(db));refreshAll()}
-function initNav(){let html=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("");nav.innerHTML=html;mobilebar.innerHTML=pages.slice(0,5).map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("")}
+function initNav(){let html=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("");nav.innerHTML=html;mobilebar.innerHTML=pages.slice(0,6).map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("")}
 function go(id,btn){document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll("nav button,.mobilebar button").forEach(x=>x.classList.toggle("active",x.textContent===pages.find(p=>p[0]===id)[1]));pageTitle.textContent=pages.find(p=>p[0]===id)[1];refreshAll()}
 function closeModal(id){document.getElementById(id).classList.remove("open")}
 function openAthlete(i=""){aIndex.value=i;if(i!==""){let a=db.athletes[i];aId.value=a.id;aName.value=a.name;aSurname.value=a.surname;aBirth.value=a.birth;aSport.value=a.sport;aCategory.value=a.category;athleteModalTitle.textContent="Modifica atleta"}else{aId.value=`ATL-${String(db.athletes.length+1).padStart(3,"0")}`;aName.value="";aSurname.value="";aBirth.value="";aSport.value="Calcio";aCategory.value="";athleteModalTitle.textContent="Nuovo atleta"}athleteModal.classList.add("open")}
 function saveAthlete(){if(!aName.value||!aSurname.value)return alert("Inserisci nome e cognome");let obj={id:aId.value.trim(),name:aName.value.trim(),surname:aSurname.value.trim(),birth:aBirth.value,sport:aSport.value.trim(),category:aCategory.value.trim()};if(aIndex.value==="")db.athletes.push(obj);else db.athletes[+aIndex.value]=obj;closeModal("athleteModal");persist()}
 function deleteAthlete(i){if(confirm("Eliminare l'atleta e le sue valutazioni?")){let id=db.athletes[i].id;db.athletes.splice(i,1);db.evaluations=db.evaluations.filter(e=>e.athleteId!==id);persist()}}
-function renderAthletes(){let q=(search?.value||"").toLowerCase();let rows=db.athletes.map((a,i)=>({...a,i})).filter(a=>(a.name+" "+a.surname+" "+a.id).toLowerCase().includes(q));athletesTable.innerHTML=rows.length?`<table><thead><tr><th>ID</th><th>Atleta</th><th>Sport</th><th>Categoria</th><th></th></tr></thead><tbody>${rows.map(a=>`<tr><td>${a.id}</td><td><b>${a.surname} ${a.name}</b></td><td>${a.sport||"—"}</td><td>${a.category||"—"}</td><td><button class="btn" onclick="openAthlete(${a.i})">Modifica</button> <button class="btn danger" onclick="deleteAthlete(${a.i})">Elimina</button></td></tr>`).join("")}</tbody></table>`:'<div class="empty">Nessun atleta</div>'}
+function renderAthletes(){let q=(search?.value||"").toLowerCase();let rows=db.athletes.map((a,i)=>({...a,i})).filter(a=>(a.name+" "+a.surname+" "+a.id).toLowerCase().includes(q));athletesTable.innerHTML=rows.length?`<table><thead><tr><th>ID</th><th>Atleta</th><th>Sport</th><th>Categoria</th><th></th></tr></thead><tbody>${rows.map(a=>`<tr><td>${a.id}</td><td><b>${a.surname} ${a.name}</b></td><td>${a.sport||"—"}</td><td>${a.category||"—"}</td><td><button class="btn profile-btn" onclick="openProfile(\'${a.id}\')">Scheda</button> <button class="btn" onclick="openAthlete(${a.i})">Modifica</button> <button class="btn danger" onclick="deleteAthlete(${a.i})">Elimina</button></td></tr>`).join("")}</tbody></table>`:'<div class="empty">Nessun atleta</div>'}
 function openEvaluation(){eAthlete.innerHTML=db.athletes.map(a=>`<option value="${a.id}">${a.surname} ${a.name}</option>`).join("");eTest.innerHTML=db.tests.map((t,i)=>`<option value="${i}">${t.name}</option>`).join("");eDate.value=new Date().toISOString().slice(0,10);eValue.value="";eNotes.value="";syncUnit();evalModal.classList.add("open")}
 function syncUnit(){eUnit.textContent="("+db.tests[+eTest.value].unit+")"}
 function saveEvaluation(){if(eValue.value==="")return alert("Inserisci il valore");let t=db.tests[+eTest.value];db.evaluations.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(),athleteId:eAthlete.value,test:t.name,date:eDate.value,value:+eValue.value,notes:eNotes.value});closeModal("evalModal");persist()}
@@ -174,7 +219,134 @@ function fmt(d){return d?new Date(d+"T12:00:00").toLocaleDateString("it-IT"):"�
 function exportData(){let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="MM_Performance_Lab_backup_"+new Date().toISOString().slice(0,10)+".json";a.click()}
 function importData(ev){let f=ev.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);persist();alert("Backup importato")}catch(e){alert("File non valido")}};r.readAsText(f)}
 function resetApp(){if(confirm("Ripristinare i dati iniziali? Tutte le valutazioni saranno cancellate.")){db={athletes:seedAthletes,tests:seedTests,evaluations:[]};persist()}}
-function refreshAll(){renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();if(window.cloudUrl)loadCloudSettings()}
+
+let tgValues = [];
+
+function initTechnogym(){
+  if(!window.tgAthlete) return;
+  tgAthlete.innerHTML = db.athletes.map(a=>`<option value="${a.id}">${a.surname} ${a.name}</option>`).join("");
+  if(!tgDate.value) tgDate.value = new Date().toISOString().slice(0,10);
+}
+
+async function readTechnogymPdf(ev){
+  const file = ev.target.files?.[0];
+  if(!file) return;
+  tgStatus.textContent = "Lettura PDF in corso...";
+  tgDetected.innerHTML = "";
+  try{
+    const pdfjs = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs");
+    pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.mjs";
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const pdf = await pdfjs.getDocument({data:bytes}).promise;
+    let text = "";
+    for(let p=1;p<=pdf.numPages;p++){
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      text += "\n" + content.items.map(x=>x.str).join(" ");
+    }
+    detectTechnogymValues(text);
+  }catch(err){
+    tgStatus.textContent = "Non riesco a leggere questo PDF. Verifica la connessione internet e riprova.";
+    console.error(err);
+  }
+}
+
+function detectTechnogymValues(text){
+  const clean = text.replace(/\s+/g," ");
+  const patterns = [
+    {test:"Peso", unit:"kg", re:/(?:peso|weight)\s*[:\-]?\s*(\d{2,3}(?:[.,]\d+)?)/i},
+    {test:"BMI", unit:"kg/m²", re:/(?:bmi|indice di massa corporea)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i},
+    {test:"Massa grassa", unit:"%", re:/(?:massa grassa|body fat|fat mass)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i},
+    {test:"Massa magra", unit:"kg", re:/(?:massa magra|lean mass|fat free mass)\s*[:\-]?\s*(\d{2,3}(?:[.,]\d+)?)/i},
+    {test:"Massa muscolare", unit:"kg", re:/(?:massa muscolare|muscle mass|skeletal muscle)\s*[:\-]?\s*(\d{2,3}(?:[.,]\d+)?)/i},
+    {test:"Acqua corporea", unit:"%", re:/(?:acqua corporea|body water|total body water)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i},
+    {test:"Metabolismo basale", unit:"kcal", re:/(?:metabolismo basale|basal metabolic rate|bmr)\s*[:\-]?\s*(\d{3,4})/i},
+    {test:"Grasso viscerale", unit:"livello", re:/(?:grasso viscerale|visceral fat)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i},
+    {test:"Età metabolica", unit:"anni", re:/(?:età metabolica|metabolic age)\s*[:\-]?\s*(\d{1,3})/i},
+    {test:"VO₂ Max", unit:"ml/kg/min", re:/(?:vo2\s*max|vo₂\s*max)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d+)?)/i}
+  ];
+  tgValues = [];
+  patterns.forEach(p=>{
+    const m = clean.match(p.re);
+    if(m) tgValues.push({...p, value:Number(m[1].replace(",","."))});
+  });
+  tgStatus.textContent = tgValues.length
+    ? `Riconosciuti ${tgValues.length} valori. Controllali prima di salvarli.`
+    : "Nessun valore riconosciuto automaticamente. Puoi aggiungerli manualmente dalla sezione Valutazioni.";
+  tgDetected.innerHTML = tgValues.map((v,i)=>`
+    <div class="field">
+      <label>${v.test} (${v.unit})</label>
+      <input type="number" step="any" value="${v.value}" onchange="tgValues[${i}].value=Number(this.value)">
+    </div>`).join("");
+}
+
+function ensureTest(name,unit){
+  let t = db.tests.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(!t){
+    t={name,unit,direction:(name.toLowerCase().includes("grassa")||name.toLowerCase().includes("viscerale")||name==="BMI")?"low":"high",category:"Technogym"};
+    db.tests.push(t);
+  }
+  return t;
+}
+
+function saveTechnogymValues(){
+  if(!tgValues.length) return alert("Non ci sono valori da salvare.");
+  if(!tgAthlete.value) return alert("Seleziona un atleta.");
+  tgValues.forEach(v=>{
+    ensureTest(v.test,v.unit);
+    db.evaluations.push({
+      id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),
+      athleteId:tgAthlete.value,
+      test:v.test,
+      date:tgDate.value,
+      value:Number(v.value),
+      notes:"Importato da PDF Technogym"
+    });
+  });
+  persist();
+  alert(`${tgValues.length} valori salvati nella scheda atleta.`);
+  clearTechnogym();
+}
+
+function clearTechnogym(){
+  tgValues=[];
+  if(window.tgPdf) tgPdf.value="";
+  if(window.tgDetected) tgDetected.innerHTML="";
+  if(window.tgStatus) tgStatus.textContent="Nessun PDF caricato.";
+}
+
+function openProfile(id){
+  const a=db.athletes.find(x=>x.id===id);
+  if(!a) return;
+  const ev=db.evaluations.filter(e=>e.athleteId===id).sort((x,y)=>y.date.localeCompare(x.date));
+  profileTitle.textContent=`${a.surname} ${a.name}`;
+  const groups={};
+  ev.forEach(e=>(groups[e.test]??=[]).push(e));
+  profileContent.innerHTML=`
+    <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">
+      <div class="card"><span class="muted">ID</span><br><b>${a.id}</b></div>
+      <div class="card"><span class="muted">Sport</span><br><b>${a.sport||"—"}</b></div>
+      <div class="card"><span class="muted">Categoria</span><br><b>${a.category||"—"}</b></div>
+    </div>
+    ${Object.keys(groups).length?Object.entries(groups).map(([name,list])=>{
+      const t=db.tests.find(x=>x.name===name)||{unit:""};
+      const last=list[0], first=list[list.length-1];
+      let improvement="—";
+      if(list.length>1 && first.value!==0){
+        const dir=t.direction||"high";
+        const p=((dir==="high"?(last.value-first.value):(first.value-last.value))/Math.abs(first.value))*100;
+        improvement=`${p>=0?"+":""}${p.toFixed(1)}%`;
+      }
+      return `<div class="card" style="margin-bottom:10px">
+        <div class="row"><b>${name}</b><span class="spacer"></span><span class="${improvement.startsWith("-")?"bad":"good"}">${improvement}</span></div>
+        <div style="font-size:24px;color:var(--gold2);margin-top:8px">${last.value} ${t.unit||""}</div>
+        <div class="muted">Ultimo: ${fmt(last.date)} · ${list.length} rilevazioni</div>
+      </div>`;
+    }).join(""):'<div class="empty">Nessuna valutazione disponibile</div>'}`;
+  profileModal.classList.add("open");
+}
+
+function refreshAll(){renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();if(window.cloudUrl)loadCloudSettings()}
 initNav();refreshAll();addEventListener("resize",drawChart);
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
 </script>
