@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab V2.3",
+  "name": "MM Performance Lab V3.0",
   "short_name": "MM Lab",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#08090a",
   "theme_color": "#0b0b0c",
-  "description": "Gestionale con confronto automatico della squadra"
+  "description": "Classifiche, grafici squadra, fasce automatiche e report PDF"
 }

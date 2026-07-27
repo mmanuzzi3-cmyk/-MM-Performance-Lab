@@ -52,6 +52,30 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
 @media(max-width:800px){.analysis-controls,.metric-summary{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.analysis-controls,.metric-summary{grid-template-columns:1fr}}
 
+
+.team-chart-wrap{margin-top:14px;background:#0e0f12;border:1px solid var(--line);border-radius:14px;padding:14px}
+.team-chart-wrap canvas{width:100%;height:340px}
+.status{display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800}
+.status.green{background:#153522;color:#8de0a8}
+.status.yellow{background:#3c3215;color:#f2d874}
+.status.red{background:#401c1c;color:#ff9c9c}
+.trend{font-size:18px;font-weight:900}
+.report-header{display:none}
+@media print{
+  aside,.mobilebar,.top,.analysis-controls,.no-print{display:none!important}
+  body,.app,main{background:white!important;color:#111!important}
+  main{padding:0!important;max-width:none!important}
+  .section{display:none!important}
+  #analysis.section{display:block!important}
+  #analysis .card{background:white!important;border:0!important;color:#111!important}
+  table{background:white!important;color:#111!important}
+  th,td{color:#111!important;border-color:#ddd!important}
+  .muted{color:#555!important}
+  .report-header{display:block!important;margin-bottom:20px}
+  .team-chart-wrap{border:1px solid #ccc;background:white!important}
+  .status.green,.status.yellow,.status.red{color:#111!important;background:#eee!important}
+}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
@@ -62,7 +86,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V2.3 Confronto squadra</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V3.0 Report squadra</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -95,7 +119,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
         <div><h3 style="margin-bottom:4px">Confronto squadra</h3>
         <div class="muted">Confronta l’ultimo risultato di ogni atleta e monitora i miglioramenti.</div></div>
         <span class="spacer"></span>
-        <button class="btn" onclick="exportAnalysisCsv()">Esporta CSV</button>
+        <div class="toolbar no-print" style="margin:0"><button class="btn" onclick="exportAnalysisCsv()">Esporta CSV</button><button class="btn gold" onclick="printTeamReport()">Esporta report PDF</button></div>
       </div>
       <div class="analysis-controls">
         <div class="field"><label>Parametro</label><select id="analysisTest" onchange="renderAnalysis()"></select></div>
@@ -108,8 +132,8 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
         </div>
         <div class="field"><label>Cerca</label><input id="analysisSearch" placeholder="Nome atleta..." oninput="renderAnalysis()"></div>
       </div>
-      <div id="analysisSummary" class="metric-summary"></div>
-      <div id="analysisTable"></div>
+      <div class="report-header"><h1>MM Performance Lab</h1><p>Report squadra</p><div id="printReportMeta"></div></div><div id="analysisSummary" class="metric-summary"></div>
+      <div class="team-chart-wrap"><canvas id="teamChart"></canvas></div><div style="height:14px"></div><div id="analysisTable"></div>
     </div>
   </section>
 
@@ -267,42 +291,122 @@ function getAnalysisRows(){
   return {rows,t,name};
 }
 
+
 function renderAnalysis(){
   const selected=analysisTest?.value;
   analysisTest.innerHTML=db.tests.map(t=>`<option value="${t.name}" ${selected===t.name?"selected":""}>${t.name}</option>`).join("");
   if(!analysisTest.value && db.tests[0]) analysisTest.value=db.tests[0].name;
-  const {rows,t}=getAnalysisRows();
+
+  const {rows,t,name}=getAnalysisRows();
   if(!rows.length){
     analysisSummary.innerHTML="";
     analysisTable.innerHTML='<div class="empty">Nessuna valutazione disponibile per questo parametro</div>';
+    drawTeamChart([],t);
     return;
   }
+
   const values=rows.map(r=>r.last);
   const avg=values.reduce((a,b)=>a+b,0)/values.length;
+  const sd=Math.sqrt(values.reduce((s,v)=>s+Math.pow(v-avg,2),0)/values.length);
   const best=t.direction==="high"?Math.max(...values):Math.min(...values);
   const improved=rows.filter(r=>r.improvement>0.0001).length;
+
   analysisSummary.innerHTML=`
     <div class="card"><span class="muted">Atleti valutati</span><br><b>${rows.length}</b></div>
     <div class="card"><span class="muted">Media squadra</span><br><b>${avg.toFixed(1)} ${t.unit}</b></div>
     <div class="card"><span class="muted">Miglior risultato</span><br><b>${best} ${t.unit}</b></div>
     <div class="card"><span class="muted">Atleti migliorati</span><br><b>${improved}</b></div>`;
+
   const min=Math.min(...values),max=Math.max(...values),range=Math.max(0.0001,max-min);
+
+  function getStatus(v){
+    const z=sd===0?0:(v-avg)/sd;
+    const score=t.direction==="high"?z:-z;
+    if(score>0.5)return {label:"Sopra media",cls:"green"};
+    if(score<-0.5)return {label:"Sotto media",cls:"red"};
+    return {label:"Nella media",cls:"yellow"};
+  }
+
   analysisTable.innerHTML=`<table><thead><tr>
-    <th>Pos.</th><th>Atleta</th><th>Ultimo valore</th><th>Confronto</th>
-    <th>Primo valore</th><th>Data</th><th>Test</th><th>Miglioramento</th>
+    <th>Pos.</th><th>Atleta</th><th>Valore</th><th>Stato</th>
+    <th>Δ ultimo test</th><th>Trend</th><th>Data</th><th>Test</th>
   </tr></thead><tbody>${rows.map((r,i)=>{
-    const pct=t.direction==="high"?((r.last-min)/range)*100:((max-r.last)/range)*100;
+    const st=getStatus(r.last);
+    const delta=r.last-r.first;
+    const trend=r.improvement>0.1?"↑":r.improvement<-0.1?"↓":"→";
+    const trendClass=r.improvement>0.1?"good":r.improvement<-0.1?"bad":"muted";
     return `<tr>
       <td><span class="rank ${i<3?"top":""}">${i+1}</span></td>
       <td><b>${r.a.surname} ${r.a.name}</b><div class="muted">${r.a.id}</div></td>
       <td><b style="color:var(--gold2)">${r.last} ${t.unit}</b></td>
-      <td><div class="barwrap"><div class="barfill" style="width:${Math.max(5,pct)}%"></div></div></td>
-      <td>${r.first} ${t.unit}</td>
+      <td><span class="status ${st.cls}">${st.label}</span></td>
+      <td class="${r.improvement>=0?'good':'bad'}"><b>${delta>=0?'+':''}${delta.toFixed(1)} ${t.unit}</b><div>${r.improvement>=0?'+':''}${r.improvement.toFixed(1)}%</div></td>
+      <td class="trend ${trendClass}">${trend}</td>
       <td>${fmt(r.lastDate)}</td>
       <td>${r.n}</td>
-      <td class="${r.improvement>=0?'good':'bad'}"><b>${r.improvement>=0?'+':''}${r.improvement.toFixed(1)}%</b></td>
     </tr>`;
   }).join("")}</tbody></table>`;
+
+  drawTeamChart(rows,t,avg);
+  if(window.printReportMeta) printReportMeta.textContent=`Parametro: ${name} · Data report: ${new Date().toLocaleDateString("it-IT")} · Atleti valutati: ${rows.length}`;
+}
+
+function drawTeamChart(rows,t,avg){
+  const c=document.getElementById("teamChart");
+  if(!c)return;
+  const ctx=c.getContext("2d");
+  const dpr=window.devicePixelRatio||1;
+  const w=c.clientWidth||800,h=340;
+  c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  ctx.font="12px system-ui";
+  if(!rows.length){
+    ctx.fillStyle="#9b9ca2";
+    ctx.fillText("Nessun dato disponibile",20,30);
+    return;
+  }
+  const vals=rows.map(r=>r.last);
+  const min=Math.min(...vals),max=Math.max(...vals);
+  const top=Math.max(max,avg||max),bottom=Math.min(min,avg||min);
+  const pad=50,chartH=h-90,chartW=w-pad-20;
+  const range=Math.max(1,top-bottom);
+  const barW=Math.max(16,chartW/rows.length*0.6);
+  const gap=chartW/rows.length;
+
+  ctx.strokeStyle="#2a2c32";
+  ctx.beginPath();ctx.moveTo(pad,20);ctx.lineTo(pad,h-55);ctx.lineTo(w-10,h-55);ctx.stroke();
+
+  if(avg!==undefined){
+    const ay=20+(top-avg)/range*chartH;
+    ctx.setLineDash([6,5]);ctx.strokeStyle="#f0d58b";
+    ctx.beginPath();ctx.moveTo(pad,ay);ctx.lineTo(w-10,ay);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle="#f0d58b";ctx.fillText(`Media ${avg.toFixed(1)}`,pad+5,ay-6);
+  }
+
+  rows.forEach((r,i)=>{
+    const x=pad+i*gap+(gap-barW)/2;
+    const bh=Math.max(4,(r.last-bottom)/range*chartH);
+    const y=h-55-bh;
+    ctx.fillStyle="#d8b25c";
+    ctx.fillRect(x,y,barW,bh);
+    ctx.fillStyle="#f4f4f2";
+    ctx.textAlign="center";
+    ctx.fillText(String(r.last),x+barW/2,y-6);
+    const label=(r.a.surname||r.a.name).slice(0,9);
+    ctx.save();
+    ctx.translate(x+barW/2,h-45);
+    ctx.rotate(-0.55);
+    ctx.fillStyle="#9b9ca2";
+    ctx.fillText(label,0,0);
+    ctx.restore();
+  });
+  ctx.textAlign="left";
+}
+
+function printTeamReport(){
+  const {rows}=getAnalysisRows();
+  if(!rows.length)return alert("Non ci sono dati da inserire nel report.");
+  window.print();
 }
 
 function exportAnalysisCsv(){
