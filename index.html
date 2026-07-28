@@ -85,6 +85,9 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
 @media(max-width:850px){.data-grid{grid-template-columns:repeat(2,1fr)}.import-item{grid-template-columns:1fr 1fr}.import-item .actions{grid-column:1/-1}}
 @media(max-width:520px){.data-grid{grid-template-columns:1fr}.import-item{grid-template-columns:1fr}}
 
+
+.sync-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#888;margin-right:7px}
+.sync-good .sync-dot{background:#64c987}.sync-busy .sync-dot{background:#f0d58b}.sync-bad .sync-dot{background:#e56b6b}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
@@ -95,7 +98,7 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V4.2 Gestione dati</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V7 Finale Cloud</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -202,12 +205,42 @@ canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--
   </section>
 
   <section id="settings" class="section">
-    <div class="card"><h3>Sincronizzazione cloud</h3><p class="muted">Collega un database Supabase gratuito per usare gli stessi dati su tablet, PC e telefono. L’app funziona anche in modalità locale.</p>
-      <div class="formgrid">
-        <div class="field"><label>Project URL</label><input id="cloudUrl" placeholder="https://xxxxx.supabase.co"></div>
-        <div class="field"><label>Anon key</label><input id="cloudKey" type="password" placeholder="Chiave anon pubblica"></div>
-        <div class="field"><label>Codice archivio personale</label><input id="workspaceId" placeholder="es. MM-LAB-2026"></div>
-        <div class="field"><label>Stato</label><div id="cloudStatus" class="pill" style="display:inline-block;margin-top:4px">Modalità locale</div></div>
+    <div class="card"><h3>Cloud sicuro</h3>
+<p class="muted">Usa lo stesso account su PC, tablet e telefono per avere sempre lo stesso database.</p>
+<div class="formgrid">
+  <div class="field"><label>Project URL Supabase</label><input id="cloudUrl" placeholder="https://xxxxx.supabase.co"></div>
+  <div class="field"><label>Publishable key</label><input id="cloudKey" type="password" placeholder="sb_publishable_..."></div>
+</div>
+<div class="toolbar" style="margin-top:14px"><button class="btn gold" onclick="saveProjectSettings()">Salva collegamento</button></div>
+<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
+<div id="authLoggedOut">
+  <div class="formgrid">
+    <div class="field"><label>Email</label><input id="cloudEmail" type="email" autocomplete="email" placeholder="La tua email"></div>
+    <div class="field"><label>Password</label><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Minimo 6 caratteri"></div>
+  </div>
+  <div class="toolbar" style="margin-top:14px">
+    <button class="btn gold" onclick="signInCloud()">Accedi</button>
+    <button class="btn" onclick="signUpCloud()">Crea account</button>
+  </div>
+</div>
+<div id="authLoggedIn" style="display:none">
+  <div class="data-grid">
+    <div class="data-card"><span class="muted">Account</span><b id="cloudUserEmail" style="font-size:15px">—</b></div>
+    <div class="data-card"><span class="muted">Stato</span><b id="cloudStatusText" style="font-size:16px">—</b></div>
+    <div class="data-card"><span class="muted">Ultima sincronizzazione</span><b id="cloudLastSync" style="font-size:14px">Mai</b></div>
+    <div class="data-card"><span class="muted">Modifiche in attesa</span><b id="cloudPending">0</b></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn gold" onclick="initialCloudSetup()">Prima sincronizzazione</button>
+    <button class="btn" onclick="syncNow()">Sincronizza adesso</button>
+    <button class="btn" onclick="pullCloud(false)">Scarica</button>
+    <button class="btn" onclick="pushCloud(false)">Carica</button>
+    <button class="btn danger" onclick="signOutCloud()">Esci</button>
+  </div>
+  <p class="muted" style="margin-top:12px">Sul PC che contiene tutti i dati scegli <b>Carica</b>. Sugli altri dispositivi scegli <b>Scarica</b>.</p>
+</div>
+<div id="cloudStatus" class="pill" style="display:inline-block;margin-top:16px">Cloud non configurato</div>
+</div>
       </div>
       <div class="toolbar" style="margin-top:16px"><button class="btn gold" onclick="saveCloudSettings()">Salva collegamento</button><button class="btn" onclick="pushCloud()">Carica dati nel cloud</button><button class="btn" onclick="pullCloud()">Scarica dati dal cloud</button></div>
     </div>
@@ -279,16 +312,63 @@ if(db.athletes.length===0 && db.tests.length===0 && db.evaluations.length===0){
   db={athletes:seedAthletes,tests:seedTests,evaluations:[]};
   localStorage.setItem("mmpl_db",JSON.stringify(db));
 }
-const cloud = JSON.parse(localStorage.getItem("mmpl_cloud")||"null") || {url:"",key:"",workspace:""};
-function loadCloudSettings(){cloudUrl.value=cloud.url||"";cloudKey.value=cloud.key||"";workspaceId.value=cloud.workspace||"";setCloudStatus(cloud.url&&cloud.key&&cloud.workspace?"Cloud configurato":"Modalità locale")}
-function setCloudStatus(msg,good=false){if(!window.cloudStatus)return;cloudStatus.textContent=msg;cloudStatus.style.color=good?"#64c987":"#f0d58b"}
-function saveCloudSettings(){cloud.url=cloudUrl.value.trim().replace(/\/$/,"");cloud.key=cloudKey.value.trim();cloud.workspace=workspaceId.value.trim();localStorage.setItem("mmpl_cloud",JSON.stringify(cloud));setCloudStatus(cloud.url&&cloud.key&&cloud.workspace?"Cloud configurato":"Dati incompleti",!!(cloud.url&&cloud.key&&cloud.workspace));alert("Impostazioni cloud salvate su questo dispositivo") }
-function cloudReady(){if(!(cloud.url&&cloud.key&&cloud.workspace)){alert("Inserisci Project URL, Anon key e codice archivio");return false}return true}
-async function pushCloud(){if(!cloudReady())return;setCloudStatus("Caricamento...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state`,{method:"POST",headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},body:JSON.stringify({workspace_id:cloud.workspace,payload:db,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error(await r.text());setCloudStatus("Dati caricati nel cloud",true);alert("Sincronizzazione completata") }catch(e){setCloudStatus("Errore cloud");alert("Collegamento non riuscito. Controlla configurazione e tabella Supabase.\n"+e.message)}}
-async function pullCloud(){if(!cloudReady())return;setCloudStatus("Download...");try{let r=await fetch(`${cloud.url}/rest/v1/mmpl_state?workspace_id=eq.${encodeURIComponent(cloud.workspace)}&select=payload,updated_at`,{headers:{apikey:cloud.key,Authorization:`Bearer ${cloud.key}`}});if(!r.ok)throw new Error(await r.text());let rows=await r.json();if(!rows.length)return alert("Nessun archivio cloud trovato: carica prima i dati da uno dei dispositivi.");if(!confirm("Sostituire i dati di questo dispositivo con quelli del cloud?"))return;db=rows[0].payload;persist();setCloudStatus("Dati scaricati dal cloud",true);alert("Dati aggiornati") }catch(e){setCloudStatus("Errore cloud");alert("Download non riuscito.\n"+e.message)}}
+const cloud = JSON.parse(localStorage.getItem("mmpl_cloud_v7")||"null") || {url:"",key:"",session:null,lastSync:null,pending:0};
+let cloudBusy=false,cloudTimer=null,suppressCloudPush=false;
+function normalizeProjectUrl(value){return String(value||"").trim().replace(/\/+$/,"").replace(/\/rest\/v1$/,"")}
+function saveCloudLocal(){localStorage.setItem("mmpl_cloud_v7",JSON.stringify(cloud))}
+function cloudProjectConfigured(){return Boolean(cloud.url&&cloud.key)}
+function cloudSignedIn(){return Boolean(cloud.session?.access_token&&cloud.session?.user?.id)}
+function authHeaders(json=false){const headers={apikey:cloud.key};if(json)headers["Content-Type"]="application/json";return headers}
+function dataHeaders(extra={}){if(!cloudSignedIn())throw new Error("Accesso cloud non effettuato.");return {apikey:cloud.key,Authorization:`Bearer ${cloud.session.access_token}`,...extra}}
+function setCloudStatus(message,type="neutral"){if(!window.cloudStatus)return;cloudStatus.className="pill "+(type==="good"?"sync-good":type==="busy"?"sync-busy":type==="bad"?"sync-bad":"");cloudStatus.innerHTML=`<span class="sync-dot"></span>${message}`}
+function updateCloudUI(){
+ if(!window.cloudUrl)return;
+ cloudUrl.value=cloud.url||"";cloudKey.value=cloud.key||"";
+ const signed=cloudSignedIn();authLoggedOut.style.display=signed?"none":"block";authLoggedIn.style.display=signed?"block":"none";
+ if(signed){cloudUserEmail.textContent=cloud.session.user.email||"Account collegato";cloudStatusText.textContent=navigator.onLine?"Online":"Offline";cloudLastSync.textContent=cloud.lastSync?new Date(cloud.lastSync).toLocaleString("it-IT"):"Mai";cloudPending.textContent=cloud.pending||0;setCloudStatus(navigator.onLine?"Cloud sicuro attivo":"Offline: dati salvati sul dispositivo",navigator.onLine?"good":"busy")}
+ else if(cloudProjectConfigured())setCloudStatus("Collegamento salvato: effettua l'accesso","busy");else setCloudStatus("Cloud non configurato")
+}
+function saveProjectSettings(){const url=normalizeProjectUrl(cloudUrl.value),key=cloudKey.value.trim();if(!url||!key)return alert("Inserisci Project URL e Publishable key.");if(!/^https:\/\/.+\.supabase\.co$/i.test(url))return alert("Il Project URL non sembra corretto.");cloud.url=url;cloud.key=key;cloud.session=null;saveCloudLocal();updateCloudUI();alert("Collegamento Supabase salvato.")}
+async function authRequest(path,body){if(!cloudProjectConfigured())throw new Error("Prima salva il collegamento Supabase.");const response=await fetch(`${cloud.url}/auth/v1/${path}`,{method:"POST",headers:authHeaders(true),body:JSON.stringify(body)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.msg||data.message||data.error_description||`Errore ${response.status}`);return data}
+async function signUpCloud(){const email=cloudEmail.value.trim(),password=cloudPassword.value;if(!email||password.length<6)return alert("Inserisci un'email valida e una password di almeno 6 caratteri.");setCloudStatus("Creazione account...","busy");try{const data=await authRequest("signup",{email,password});if(data.access_token){cloud.session=data;saveCloudLocal();updateCloudUI();alert("Account creato. Ora esegui la prima sincronizzazione.")}else{setCloudStatus("Conferma l'email","busy");alert("Account creato. Controlla l'email di conferma, poi premi Accedi.")}}catch(error){setCloudStatus("Creazione account non riuscita","bad");alert(error.message)}}
+async function signInCloud(){const email=cloudEmail.value.trim(),password=cloudPassword.value;if(!email||!password)return alert("Inserisci email e password.");setCloudStatus("Accesso in corso...","busy");try{cloud.session=await authRequest("token?grant_type=password",{email,password});saveCloudLocal();updateCloudUI();if((cloud.pending||0)>0)await pushCloud(true);else await pullCloud(true)}catch(error){setCloudStatus("Accesso non riuscito","bad");alert(error.message)}}
+async function refreshSession(){if(!cloud.session?.refresh_token)return false;try{cloud.session=await authRequest("token?grant_type=refresh_token",{refresh_token:cloud.session.refresh_token});saveCloudLocal();updateCloudUI();return true}catch(error){cloud.session=null;saveCloudLocal();updateCloudUI();return false}}
+async function ensureFreshSession(){if(!cloudSignedIn())return false;const expiresAt=Number(cloud.session.expires_at||0)*1000;if(expiresAt&&Date.now()<expiresAt-60000)return true;return refreshSession()}
+async function signOutCloud(){try{if(cloudSignedIn())await fetch(`${cloud.url}/auth/v1/logout`,{method:"POST",headers:dataHeaders()})}catch(error){}cloud.session=null;saveCloudLocal();updateCloudUI()}
+function cloudRowUrl(){return `${cloud.url}/rest/v1/mmpl_state?user_id=eq.${encodeURIComponent(cloud.session.user.id)}`}
+async function fetchCloudState(){if(!cloudSignedIn())return null;await ensureFreshSession();const response=await fetch(`${cloudRowUrl()}&select=payload,updated_at&limit=1`,{headers:dataHeaders()});if(!response.ok)throw new Error(`${response.status}: ${await response.text()}`);const rows=await response.json();return rows[0]||null}
+function markPending(){cloud.pending=1;saveCloudLocal();updateCloudUI()}
+async function pushCloud(silent=false){
+ if(!cloudSignedIn()||cloudBusy||!navigator.onLine)return false;
+ cloudBusy=true;setCloudStatus("Salvataggio nel cloud...","busy");
+ try{
+  await ensureFreshSession();
+  const response=await fetch(`${cloud.url}/rest/v1/mmpl_state?on_conflict=user_id`,{method:"POST",headers:dataHeaders({"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify({user_id:cloud.session.user.id,payload:db,updated_at:new Date().toISOString()})});
+  if(!response.ok)throw new Error(`${response.status}: ${await response.text()}`);
+  cloud.lastSync=new Date().toISOString();cloud.pending=0;saveCloudLocal();updateCloudUI();setCloudStatus("Dati sincronizzati","good");if(!silent)alert("Dati caricati nel cloud.");return true
+ }catch(error){setCloudStatus("Errore di sincronizzazione","bad");if(!silent)alert("Salvataggio cloud non riuscito. I dati restano sul dispositivo.\n\n"+error.message);return false}
+ finally{cloudBusy=false}
+}
+function scheduleCloudPush(){if(suppressCloudPush||!cloudSignedIn())return;markPending();clearTimeout(cloudTimer);cloudTimer=setTimeout(()=>pushCloud(true),1200)}
+async function pullCloud(silent=false){
+ if(!cloudSignedIn()||cloudBusy||!navigator.onLine)return null;
+ cloudBusy=true;setCloudStatus("Download dal cloud...","busy");
+ try{
+  const remote=await fetchCloudState();
+  if(!remote){setCloudStatus("Archivio cloud vuoto","busy");if(!silent)alert("Il cloud è ancora vuoto.");return null}
+  suppressCloudPush=true;db=remote.payload;localStorage.setItem("mmpl_db",JSON.stringify(db));suppressCloudPush=false;
+  cloud.lastSync=new Date().toISOString();cloud.pending=0;saveCloudLocal();refreshAll();updateCloudUI();setCloudStatus("Database aggiornato","good");if(!silent)alert("Database scaricato dal cloud.");return remote
+ }catch(error){suppressCloudPush=false;setCloudStatus("Download non riuscito","bad");if(!silent)alert(error.message);return null}
+ finally{cloudBusy=false}
+}
+async function initialCloudSetup(){if(!cloudSignedIn())return alert("Prima effettua l'accesso.");const remote=await fetchCloudState().catch(()=>null);if(remote){const download=confirm("Nel cloud esiste già un database.\n\nOK = SCARICA il cloud su questo dispositivo\nANNULLA = CARICA i dati di questo dispositivo");if(download)await pullCloud(false);else await pushCloud(false)}else{const upload=confirm("Il cloud è vuoto.\nVuoi CARICARE i dati presenti su questo dispositivo?");if(upload)await pushCloud(false)}}
+async function syncNow(){if(!cloudSignedIn())return alert("Prima effettua l'accesso.");if(!navigator.onLine)return alert("Il dispositivo è offline.");if((cloud.pending||0)>0)await pushCloud(false);else await pullCloud(false)}
+async function autoCloudStartup(){updateCloudUI();if(!cloudSignedIn()||!navigator.onLine)return;const valid=await ensureFreshSession();if(!valid)return;if((cloud.pending||0)>0)await pushCloud(true);else await pullCloud(true)}
+window.addEventListener("online",async()=>{updateCloudUI();if(cloudSignedIn()){if((cloud.pending||0)>0)await pushCloud(true);else await pullCloud(true)}});
+window.addEventListener("offline",updateCloudUI);
 
 const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["catalog","Catalogo Test"],["data","Gestione dati"],["settings","Impostazioni"]];
-function persist(){localStorage.setItem("mmpl_db",JSON.stringify(db));refreshAll()}
+function persist(){localStorage.setItem("mmpl_db",JSON.stringify(db));refreshAll();scheduleCloudPush()}
 function initNav(){let html=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("");nav.innerHTML=html;mobilebar.innerHTML=pages.slice(0,6).map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("")}
 function go(id,btn){document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll("nav button,.mobilebar button").forEach(x=>x.classList.toggle("active",x.textContent===pages.find(p=>p[0]===id)[1]));pageTitle.textContent=pages.find(p=>p[0]===id)[1];refreshAll()}
 function closeModal(id){document.getElementById(id).classList.remove("open")}
@@ -385,55 +465,22 @@ function renderAnalysis(){
 }
 
 function drawTeamChart(rows,t,avg){
-  const c=document.getElementById("teamChart");
-  if(!c)return;
-  const ctx=c.getContext("2d");
-  const dpr=window.devicePixelRatio||1;
-  const w=c.clientWidth||800,h=340;
-  c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);
-  ctx.clearRect(0,0,w,h);
-  ctx.font="12px system-ui";
-  if(!rows.length){
-    ctx.fillStyle="#9b9ca2";
-    ctx.fillText("Nessun dato disponibile",20,30);
-    return;
-  }
-  const vals=rows.map(r=>r.last);
-  const min=Math.min(...vals),max=Math.max(...vals);
-  const top=Math.max(max,avg||max),bottom=Math.min(min,avg||min);
-  const pad=50,chartH=h-90,chartW=w-pad-20;
-  const range=Math.max(1,top-bottom);
-  const barW=Math.max(16,chartW/rows.length*0.6);
-  const gap=chartW/rows.length;
-
-  ctx.strokeStyle="#2a2c32";
-  ctx.beginPath();ctx.moveTo(pad,20);ctx.lineTo(pad,h-55);ctx.lineTo(w-10,h-55);ctx.stroke();
-
-  if(avg!==undefined){
-    const ay=20+(top-avg)/range*chartH;
-    ctx.setLineDash([6,5]);ctx.strokeStyle="#f0d58b";
-    ctx.beginPath();ctx.moveTo(pad,ay);ctx.lineTo(w-10,ay);ctx.stroke();
-    ctx.setLineDash([]);ctx.fillStyle="#f0d58b";ctx.fillText(`Media ${avg.toFixed(1)}`,pad+5,ay-6);
-  }
-
-  rows.forEach((r,i)=>{
-    const x=pad+i*gap+(gap-barW)/2;
-    const bh=Math.max(4,(r.last-bottom)/range*chartH);
-    const y=h-55-bh;
-    ctx.fillStyle="#d8b25c";
-    ctx.fillRect(x,y,barW,bh);
-    ctx.fillStyle="#f4f4f2";
-    ctx.textAlign="center";
-    ctx.fillText(String(r.last),x+barW/2,y-6);
-    const label=(r.a.surname||r.a.name).slice(0,9);
-    ctx.save();
-    ctx.translate(x+barW/2,h-45);
-    ctx.rotate(-0.55);
-    ctx.fillStyle="#9b9ca2";
-    ctx.fillText(label,0,0);
-    ctx.restore();
-  });
-  ctx.textAlign="left";
+ const c=document.getElementById("teamChart");if(!c)return;
+ const ctx=c.getContext("2d"),dpr=window.devicePixelRatio||1,w=c.clientWidth||800,many=rows.length>8,h=many?Math.max(390,rows.length*34+80):390;
+ c.style.height=h+"px";c.width=w*dpr;c.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.font="12px system-ui";
+ if(!rows.length){ctx.fillStyle="#9b9ca2";ctx.fillText("Nessun dato disponibile",20,30);return}
+ const vals=rows.map(r=>r.last),min=Math.min(...vals),max=Math.max(...vals),top=Math.max(max,avg??max),bottom=Math.min(min,avg??min),range=Math.max(1,top-bottom);
+ if(many){
+  const left=Math.min(165,Math.max(115,w*0.28)),right=58,topPad=35,rowH=(h-topPad-25)/rows.length,chartW=Math.max(80,w-left-right);
+  if(avg!==undefined){const ax=left+(avg-bottom)/range*chartW;ctx.setLineDash([6,5]);ctx.strokeStyle="#f0d58b";ctx.beginPath();ctx.moveTo(ax,20);ctx.lineTo(ax,h-15);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#f0d58b";ctx.textAlign="center";ctx.fillText(`Media ${avg.toFixed(1)}`,ax,14)}
+  rows.forEach((r,i)=>{const y=topPad+i*rowH+4,bw=Math.max(4,(r.last-bottom)/range*chartW),full=`${r.a.surname} ${r.a.name}`.trim();ctx.textAlign="right";ctx.fillStyle="#c7c8cc";ctx.font="11px system-ui";ctx.fillText(full.length>23?full.slice(0,22)+"…":full,left-8,y+rowH*0.48);ctx.fillStyle="#d8b25c";ctx.fillRect(left,y,bw,Math.max(10,rowH-8));ctx.textAlign="left";ctx.fillStyle="#f4f4f2";ctx.font="bold 11px system-ui";ctx.fillText(String(r.last),Math.min(w-42,left+bw+6),y+rowH*0.48)});
+  ctx.textAlign="left";return
+ }
+ const pad=50,bottomPad=84,chartH=h-bottomPad-20,chartW=w-pad-20,barW=Math.max(18,chartW/rows.length*0.58),gap=chartW/rows.length;
+ ctx.strokeStyle="#2a2c32";ctx.beginPath();ctx.moveTo(pad,20);ctx.lineTo(pad,h-bottomPad);ctx.lineTo(w-10,h-bottomPad);ctx.stroke();
+ if(avg!==undefined){const ay=20+(top-avg)/range*chartH;ctx.setLineDash([6,5]);ctx.strokeStyle="#f0d58b";ctx.beginPath();ctx.moveTo(pad,ay);ctx.lineTo(w-10,ay);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#f0d58b";ctx.textAlign="left";ctx.fillText(`Media ${avg.toFixed(1)}`,pad+5,ay-6)}
+ rows.forEach((r,i)=>{const x=pad+i*gap+(gap-barW)/2,bh=Math.max(4,(r.last-bottom)/range*chartH),y=h-bottomPad-bh;ctx.fillStyle="#d8b25c";ctx.fillRect(x,y,barW,bh);ctx.fillStyle="#f4f4f2";ctx.textAlign="center";ctx.font="bold 11px system-ui";ctx.fillText(String(r.last),x+barW/2,y-7);ctx.fillStyle="#b9bac0";ctx.font="11px system-ui";ctx.fillText((r.a.surname||"").slice(0,13),x+barW/2,h-bottomPad+18);ctx.fillText((r.a.name||"").slice(0,12),x+barW/2,h-bottomPad+35)});
+ ctx.textAlign="left"
 }
 
 function printTeamReport(){
@@ -464,7 +511,7 @@ function fmt(d){return d?new Date(d+"T12:00:00").toLocaleDateString("it-IT"):"�
 function exportData(){
   const stamp=new Date().toISOString();
   localStorage.setItem("mmpl_last_backup",stamp);
-  const payload={...db,backupMeta:{createdAt:stamp,appVersion:"4.2"}};
+  const payload={...db,backupMeta:{createdAt:stamp,appVersion:"7.0"}};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
@@ -792,8 +839,8 @@ function deleteAllTechnogym(){
   alert("Tutte le importazioni Technogym sono state eliminate.");
 }
 
-function refreshAll(){renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();renderDataManagement();if(window.cloudUrl)loadCloudSettings()}
-initNav();refreshAll();addEventListener("resize",drawChart);
+function refreshAll(){renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();renderDataManagement();if(window.cloudUrl)updateCloudUI()}
+initNav();refreshAll();autoCloudStartup();addEventListener("resize",drawChart);
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
 </script>
 </body></html>

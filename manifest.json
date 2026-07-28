@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab V4.2",
+  "name": "MM Performance Lab V7 Finale",
   "short_name": "MM Lab",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#08090a",
-  "theme_color": "#0b0b0c",
-  "description": "Gestione importazioni Technogym, backup e ripristino"
+  "background_color": "#08090c",
+  "theme_color": "#08090c",
+  "description": "Gestionale sportivo con cloud sicuro e sincronizzazione multi-dispositivo"
 }
