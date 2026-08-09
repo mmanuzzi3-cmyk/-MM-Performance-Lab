@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab V7 Finale",
-  "short_name": "MM Lab",
+  "name": "MM Performance Lab V8 Operativa",
+  "short_name": "MM Lab V8",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#08090c",
   "theme_color": "#08090c",
-  "description": "Gestionale sportivo con cloud sicuro e sincronizzazione multi-dispositivo"
+  "description": "Sincronizzazione intelligente, annotazioni, correzione PDF e report confronti"
 }

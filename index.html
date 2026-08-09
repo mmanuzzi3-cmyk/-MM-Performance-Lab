@@ -27,7 +27,7 @@ table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:
 .chart{height:260px;border:1px solid var(--line);border-radius:14px;background:#0e0f12;padding:8px}
 canvas{width:100%;height:100%}.empty{text-align:center;padding:36px;color:var(--muted)}
 .testchips{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:7px 10px;border-radius:999px;background:#262117;color:var(--gold2);font-size:12px}
-.mobilebar{display:none}
+.mobilebar{overflow-x:auto;white-space:nowrap;display:none}
 @media(max-width:900px){.app{grid-template-columns:1fr}aside{display:none}main{padding:18px 14px 82px}.grid{grid-template-columns:repeat(2,1fr)}.mobilebar{display:flex;position:fixed;left:0;right:0;bottom:0;background:#101114;border-top:1px solid var(--line);z-index:4;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom))}.mobilebar button{background:none;border:0;color:var(--muted);font-size:11px;padding:8px}.mobilebar button.active{color:var(--gold2)}}
 @media(max-width:560px){.grid,.formgrid{grid-template-columns:1fr}.top h2{font-size:23px}th:nth-child(4),td:nth-child(4){display:none}}
 
@@ -141,6 +141,29 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
   .modalbox{padding:15px;border-radius:14px}
 }
 
+
+.notes-list{display:grid;gap:10px;margin-top:12px}
+.note-item{border:1px solid var(--line);background:#111216;border-radius:12px;padding:12px}
+.note-item .note-date{font-size:12px;color:var(--gold2);font-weight:700;margin-bottom:6px}
+.pdf-edit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.pdf-edit-grid .field{background:#111216;border:1px solid var(--line);border-radius:10px;padding:10px}
+.check-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+.check-item{display:flex;gap:8px;align-items:center;padding:9px 10px;background:#111216;border:1px solid var(--line);border-radius:10px}
+.compare-toolbar{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.compare-report{display:none}
+.smart-sync{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.smart-sync .last-sync{font-size:12px;color:var(--muted)}
+@media(max-width:800px){.pdf-edit-grid,.check-grid{grid-template-columns:1fr 1fr}.compare-toolbar{grid-template-columns:1fr}}
+@media(max-width:520px){.pdf-edit-grid,.check-grid{grid-template-columns:1fr}}
+@media print{
+ body.print-comparison aside,body.print-comparison .mobilebar,body.print-comparison .top,body.print-comparison main>.section{display:none!important}
+ body.print-comparison #comparisonPrintArea{display:block!important;padding:18px!important;background:white!important;color:#111!important}
+ body.print-comparison{background:white!important;color:#111!important}
+ body.print-comparison table{color:#111!important;background:white!important}
+ body.print-comparison th,body.print-comparison td{color:#111!important;border-color:#ddd!important}
+ body.print-comparison .muted{color:#555!important}
+}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
@@ -151,7 +174,7 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V7.1 Mobile Cloud</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V8 Operativa Cloud</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -257,6 +280,52 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
     </div>
   </section>
 
+
+  <section id="pdfdata" class="section">
+    <div class="card">
+      <div><h3 style="margin-bottom:4px">Dati PDF atleta</h3>
+      <div class="muted">Correggi in una sola schermata tutti i valori importati da un Wellness Report.</div></div>
+      <div class="formgrid" style="margin-top:14px">
+        <div class="field"><label>Atleta</label><select id="pdfEditAthlete" onchange="renderPdfImportChoices()"></select></div>
+        <div class="field"><label>Importazione</label><select id="pdfEditImport" onchange="renderPdfEditorFields()"></select></div>
+        <div class="field"><label>Data test</label><input id="pdfEditDate" type="date"></div>
+      </div>
+      <div id="pdfEditStatus" class="statusline">Seleziona atleta e importazione.</div>
+      <div id="pdfEditFields" class="pdf-edit-grid"></div>
+      <div class="toolbar" style="margin-top:16px"><button class="btn gold" onclick="savePdfBulkEdits()">Salva tutte le correzioni</button></div>
+    </div>
+  </section>
+
+  <section id="compare" class="section">
+    <div class="card">
+      <div><h3 style="margin-bottom:4px">Report confronto atleti</h3>
+      <div class="muted">Crea un PDF per atleti selezionati, un gruppo oppure tutta la squadra.</div></div>
+      <div class="compare-toolbar" style="margin-top:14px">
+        <div class="field"><label>Atleti da includere</label>
+          <select id="compareMode" onchange="renderComparisonSelectors()">
+            <option value="all">Tutti gli atleti</option>
+            <option value="selected">Seleziona atleti / gruppo</option>
+          </select>
+        </div>
+        <div class="field"><label>Valori</label><select><option>Ultimo valore disponibile</option></select></div>
+      </div>
+      <h4>Atleti</h4><div id="compareAthletes" class="check-grid"></div>
+      <h4>Parametri</h4>
+      <div class="toolbar" style="margin:0 0 8px">
+        <button class="btn" onclick="setAllCompareMetrics(true)">Seleziona tutti</button>
+        <button class="btn" onclick="setAllCompareMetrics(false)">Deseleziona tutti</button>
+      </div>
+      <div id="compareMetrics" class="check-grid"></div>
+      <div class="toolbar" style="margin-top:16px">
+        <button class="btn gold" onclick="buildComparisonReport()">Genera anteprima</button>
+        <button class="btn" onclick="printComparisonReport()">Stampa / Salva PDF</button>
+      </div>
+      <div id="comparisonPreview" style="margin-top:18px"></div>
+    </div>
+  </section>
+
+  <div id="comparisonPrintArea" class="compare-report"></div>
+
   <section id="settings" class="section">
     <div class="card"><h3>Cloud sicuro</h3>
 <p class="muted">Usa lo stesso account su PC, tablet e telefono per avere sempre lo stesso database.</p>
@@ -284,13 +353,13 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
     <div class="data-card"><span class="muted">Modifiche in attesa</span><b id="cloudPending">0</b></div>
   </div>
   <div class="toolbar">
-    <button class="btn gold" onclick="initialCloudSetup()">Prima sincronizzazione</button>
-    <button class="btn" onclick="syncNow()">Sincronizza adesso</button>
-    <button class="btn" onclick="pullCloud(false)">Scarica</button>
-    <button class="btn" onclick="pushCloud(false)">Carica</button>
+    <div class="smart-sync">
+      <button class="btn gold" onclick="smartSync(false)">Sincronizza</button>
+      <span class="last-sync">Ultima sincronizzazione: <b id="smartSyncTime">mai</b></span>
+    </div>
     <button class="btn danger" onclick="signOutCloud()">Esci</button>
   </div>
-  <p class="muted" style="margin-top:12px">Sul PC che contiene tutti i dati scegli <b>Carica</b>. Sugli altri dispositivi scegli <b>Scarica</b>.</p>
+  <p class="muted" style="margin-top:12px">Premi semplicemente <b>Sincronizza</b>: l’app confronta le date e decide automaticamente se caricare o scaricare.</p>
 </div>
 <div id="cloudStatus" class="pill" style="display:inline-block;margin-top:16px">Cloud non configurato</div>
 </div>
@@ -337,6 +406,15 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
 <div class="modal" id="profileModal"><div class="modalbox" style="width:min(900px,100%)">
 <div class="row"><h3 id="profileTitle">Scheda atleta</h3><span class="spacer"></span><button class="btn" onclick="closeModal('profileModal')">✕</button></div>
 <div id="profileContent"></div>
+<div class="card" style="margin-top:14px">
+  <h3 style="margin:0">Annotazioni atleta</h3>
+  <div class="formgrid" style="margin-top:12px">
+    <div class="field"><label>Data</label><input id="noteDate" type="date"></div>
+    <div class="field" style="grid-column:1/-1"><label>Annotazione</label><textarea id="noteText" rows="3" placeholder="Osservazioni, progressi, indicazioni..."></textarea></div>
+  </div>
+  <div class="toolbar" style="margin-top:12px"><button class="btn gold" onclick="addAthleteNote()">Aggiungi annotazione</button></div>
+  <div id="athleteNotesList" class="notes-list"></div>
+</div>
 <div class="toolbar" style="margin-top:18px"><button class="btn gold" onclick="window.print()">Stampa / Salva PDF</button></div>
 </div></div>
 
@@ -378,7 +456,7 @@ function updateCloudUI(){
  if(!window.cloudUrl)return;
  cloudUrl.value=cloud.url||"";cloudKey.value=cloud.key||"";
  const signed=cloudSignedIn();authLoggedOut.style.display=signed?"none":"block";authLoggedIn.style.display=signed?"block":"none";
- if(signed){cloudUserEmail.textContent=cloud.session.user.email||"Account collegato";cloudStatusText.textContent=navigator.onLine?"Online":"Offline";cloudLastSync.textContent=cloud.lastSync?new Date(cloud.lastSync).toLocaleString("it-IT"):"Mai";cloudPending.textContent=cloud.pending||0;setCloudStatus(navigator.onLine?"Cloud sicuro attivo":"Offline: dati salvati sul dispositivo",navigator.onLine?"good":"busy")}
+ if(signed){cloudUserEmail.textContent=cloud.session.user.email||"Account collegato";cloudStatusText.textContent=navigator.onLine?"Online":"Offline";cloudLastSync.textContent=cloud.lastSync?new Date(cloud.lastSync).toLocaleString("it-IT"):"Mai";cloudPending.textContent=cloud.pending||0;updateSmartSyncTime();setCloudStatus(navigator.onLine?"Cloud sicuro attivo":"Offline: dati salvati sul dispositivo",navigator.onLine?"good":"busy")}
  else if(cloudProjectConfigured())setCloudStatus("Collegamento salvato: effettua l'accesso","busy");else setCloudStatus("Cloud non configurato")
 }
 function saveProjectSettings(){const url=normalizeProjectUrl(cloudUrl.value),key=cloudKey.value.trim();if(!url||!key)return alert("Inserisci Project URL e Publishable key.");if(!/^https:\/\/.+\.supabase\.co$/i.test(url))return alert("Il Project URL non sembra corretto.");cloud.url=url;cloud.key=key;cloud.session=null;saveCloudLocal();updateCloudUI();alert("Collegamento Supabase salvato.")}
@@ -415,14 +493,69 @@ async function pullCloud(silent=false){
  finally{cloudBusy=false}
 }
 async function initialCloudSetup(){if(!cloudSignedIn())return alert("Prima effettua l'accesso.");const remote=await fetchCloudState().catch(()=>null);if(remote){const download=confirm("Nel cloud esiste già un database.\n\nOK = SCARICA il cloud su questo dispositivo\nANNULLA = CARICA i dati di questo dispositivo");if(download)await pullCloud(false);else await pushCloud(false)}else{const upload=confirm("Il cloud è vuoto.\nVuoi CARICARE i dati presenti su questo dispositivo?");if(upload)await pushCloud(false)}}
+
+function updateSmartSyncTime(){
+  if(window.smartSyncTime)smartSyncTime.textContent=cloud.lastSync?new Date(cloud.lastSync).toLocaleString("it-IT"):"mai";
+}
+async function smartSync(silent=false){
+  if(!cloudSignedIn()){if(!silent)alert("Prima effettua l'accesso al cloud.");return}
+  if(!navigator.onLine){if(!silent)alert("Sei offline. Le modifiche restano salvate sul dispositivo.");return}
+  if(cloudBusy)return;
+  setCloudStatus("Controllo versione più recente...","busy");
+  try{
+    const remote=await fetchCloudState();
+    const localUpdated=new Date(db.meta?.updatedAt||0).getTime();
+    const remoteUpdated=remote?new Date(remote.updated_at||0).getTime():0;
+    if(!remote){
+      await pushCloud(true);
+      if(!silent)alert("Sincronizzazione completata: dati caricati nel cloud.");
+    }else if((cloud.pending||0)>0||localUpdated>remoteUpdated+1000){
+      await pushCloud(true);
+      if(!silent)alert("Sincronizzazione completata: modifiche caricate.");
+    }else if(remoteUpdated>localUpdated+1000){
+      await pullCloud(true);
+      if(!silent)alert("Sincronizzazione completata: dati più recenti scaricati.");
+    }else{
+      cloud.lastSync=new Date().toISOString();cloud.pending=0;saveCloudLocal();updateCloudUI();
+      if(!silent)alert("I dati sono già sincronizzati.");
+    }
+    updateSmartSyncTime();
+  }catch(error){
+    setCloudStatus("Sincronizzazione non riuscita","bad");
+    if(!silent)alert(error.message);
+  }
+}
 async function syncNow(){if(!cloudSignedIn())return alert("Prima effettua l'accesso.");if(!navigator.onLine)return alert("Il dispositivo è offline.");if((cloud.pending||0)>0)await pushCloud(false);else await pullCloud(false)}
-async function autoCloudStartup(){updateCloudUI();if(!cloudSignedIn()||!navigator.onLine)return;const valid=await ensureFreshSession();if(!valid)return;if((cloud.pending||0)>0)await pushCloud(true);else await pullCloud(true)}
-window.addEventListener("online",async()=>{updateCloudUI();if(cloudSignedIn()){if((cloud.pending||0)>0)await pushCloud(true);else await pullCloud(true)}});
+async function autoCloudStartup(){
+  updateCloudUI();
+  if(!cloudSignedIn()||!navigator.onLine)return;
+  const valid=await ensureFreshSession();
+  if(valid)await smartSync(true);
+}
+window.addEventListener("online",async()=>{updateCloudUI();if(cloudSignedIn())await smartSync(true)});
 window.addEventListener("offline",updateCloudUI);
 
-const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["catalog","Catalogo Test"],["data","Gestione dati"],["settings","Impostazioni"]];
-function persist(){localStorage.setItem("mmpl_db",JSON.stringify(db));refreshAll();scheduleCloudPush()}
-function initNav(){let html=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("");nav.innerHTML=html;mobilebar.innerHTML=pages.slice(0,6).map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("")}
+
+function ensureV8Data(){
+  db.notes=Array.isArray(db.notes)?db.notes:[];
+  db.meta=db.meta||{};
+  if(!db.meta.updatedAt)db.meta.updatedAt=new Date(0).toISOString();
+
+  const oldTest=db.tests.find(t=>t.name==="Massa grassa"&&t.unit==="%");
+  const newTest=db.tests.find(t=>t.name==="Massa grassa %");
+  if(oldTest&&!newTest)oldTest.name="Massa grassa %";
+  db.evaluations.forEach(e=>{if(e.test==="Massa grassa")e.test="Massa grassa %"});
+  if(!db.tests.some(t=>t.name==="Massa grassa %")){
+    db.tests.push({name:"Massa grassa %",unit:"%",direction:"low",category:"Composizione corporea"});
+  }
+}
+ensureV8Data();
+function touchDb(){db.meta=db.meta||{};db.meta.updatedAt=new Date().toISOString()}
+function escapeHtml(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["pdfdata","Dati PDF"],["compare","Report confronti"],["catalog","Catalogo Test"],["data","Gestione dati"],["settings","Impostazioni"]];
+function persist(){touchDb();localStorage.setItem("mmpl_db",JSON.stringify(db));refreshAll();scheduleCloudPush()}
+function initNav(){let html=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("");nav.innerHTML=html;mobilebar.innerHTML=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("")}
 function go(id,btn){document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll("nav button,.mobilebar button").forEach(x=>x.classList.toggle("active",x.textContent===pages.find(p=>p[0]===id)[1]));pageTitle.textContent=pages.find(p=>p[0]===id)[1];refreshAll()}
 function closeModal(id){document.getElementById(id).classList.remove("open")}
 function openAthlete(i=""){aIndex.value=i;if(i!==""){let a=db.athletes[i];aId.value=a.id;aName.value=a.name;aSurname.value=a.surname;aBirth.value=a.birth;aSport.value=a.sport;aCategory.value=a.category;athleteModalTitle.textContent="Modifica atleta"}else{aId.value=`ATL-${String(db.athletes.length+1).padStart(3,"0")}`;aName.value="";aSurname.value="";aBirth.value="";aSport.value="Calcio";aCategory.value="";athleteModalTitle.textContent="Nuovo atleta"}athleteModal.classList.add("open")}
@@ -457,6 +590,31 @@ function getAnalysisRows(){
   return {rows,t,name};
 }
 
+
+
+function renderComparisonSelectors(){
+  if(!window.compareAthletes)return;
+  compareAthletes.style.display=compareMode.value==="all"?"none":"grid";
+  compareAthletes.innerHTML=db.athletes.slice().sort((a,b)=>(a.surname+a.name).localeCompare(b.surname+b.name)).map(a=>`<label class="check-item"><input type="checkbox" class="compare-athlete" value="${a.id}" checked><span>${escapeHtml(a.surname)} ${escapeHtml(a.name)}</span></label>`).join("");
+  const already=[...document.querySelectorAll(".compare-metric:checked")].map(x=>x.value);
+  compareMetrics.innerHTML=db.tests.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(t=>`<label class="check-item"><input type="checkbox" class="compare-metric" value="${escapeHtml(t.name)}" ${already.length?(already.includes(t.name)?"checked":""):"checked"}><span>${escapeHtml(t.name)} ${t.unit?`(${escapeHtml(t.unit)})`:""}</span></label>`).join("");
+}
+function setAllCompareMetrics(value){document.querySelectorAll(".compare-metric").forEach(x=>x.checked=value)}
+function selectedComparisonAthletes(){if(compareMode.value==="all")return db.athletes.slice();const ids=[...document.querySelectorAll(".compare-athlete:checked")].map(x=>x.value);return db.athletes.filter(a=>ids.includes(a.id))}
+function selectedComparisonMetrics(){return [...document.querySelectorAll(".compare-metric:checked")].map(x=>x.value)}
+function latestEvalFor(athleteId,test){return db.evaluations.filter(e=>e.athleteId===athleteId&&e.test===test).sort((a,b)=>b.date.localeCompare(a.date))[0]||null}
+function buildComparisonReport(){
+  const athletes=selectedComparisonAthletes(),metrics=selectedComparisonMetrics();
+  if(!athletes.length)return alert("Seleziona almeno un atleta.");
+  if(!metrics.length)return alert("Seleziona almeno un parametro.");
+  const rows=athletes.slice().sort((a,b)=>(a.surname+a.name).localeCompare(b.surname+b.name));
+  const title=compareMode.value==="all"?"Confronto completo squadra":"Confronto atleti selezionati";
+  const table=`<table><thead><tr><th>Atleta</th>${metrics.map(m=>`<th>${escapeHtml(m)}</th>`).join("")}</tr></thead><tbody>${rows.map(a=>`<tr><td><b>${escapeHtml(a.surname)} ${escapeHtml(a.name)}</b></td>${metrics.map(m=>{const e=latestEvalFor(a.id,m),t=db.tests.find(x=>x.name===m)||{};return `<td>${e?`${e.value} ${escapeHtml(t.unit||"")}<div class="muted">${fmt(e.date)}</div>`:"—"}</td>`}).join("")}</tr>`).join("")}</tbody></table>`;
+  const notes=rows.map(a=>{const last=(db.notes||[]).filter(n=>n.athleteId===a.id).sort((x,y)=>(y.date+(y.createdAt||"")).localeCompare(x.date+(x.createdAt||"")))[0];return last?`<tr><td><b>${escapeHtml(a.surname)} ${escapeHtml(a.name)}</b></td><td>${fmt(last.date)}</td><td>${escapeHtml(last.text)}</td></tr>`:""}).filter(Boolean).join("");
+  const content=`<div class="card"><h1 style="margin-bottom:4px">MM Performance Lab</h1><h2>${title}</h2><div class="muted">Generato il ${new Date().toLocaleDateString("it-IT")} · ${rows.length} atleti · ${metrics.length} parametri</div><div style="height:16px"></div>${table}${notes?`<h3 style="margin-top:24px">Ultime annotazioni</h3><table><thead><tr><th>Atleta</th><th>Data</th><th>Annotazione</th></tr></thead><tbody>${notes}</tbody></table>`:""}</div>`;
+  comparisonPreview.innerHTML=content;comparisonPrintArea.innerHTML=content;
+}
+function printComparisonReport(){buildComparisonReport();if(!comparisonPrintArea.innerHTML)return;document.body.classList.add("print-comparison");window.print();setTimeout(()=>document.body.classList.remove("print-comparison"),500)}
 
 function renderAnalysis(){
   const selected=analysisTest?.value;
@@ -666,7 +824,7 @@ function detectTechnogymValues(pages){
   add("BMI","kg\/m²",cap(weight,/\bBMI\s+(\d{1,2}(?:[.,]\d+)?)/i));
 
   pair(weight,/Massa\s+grassa\s*\(BFM\)[\s\S]{0,60}?(\d{1,3}(?:[.,]\d+)?)\s*%[\s\S]{0,40}?\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg/i,
-       "Massa grassa","Massa grassa kg");
+       "Massa grassa %","Massa grassa kg");
   pair(weight,/Massa\s+magra\s*\(FFM\)[\s\S]{0,60}?(\d{1,3}(?:[.,]\d+)?)\s*%[\s\S]{0,40}?\(\s*(\d{1,3}(?:[.,]\d+)?)\s*kg/i,
        "Massa magra %","Massa magra");
 
@@ -826,9 +984,36 @@ function openProfile(id){
         <div class="muted">Ultimo: ${fmt(last.date)} · ${list.length} rilevazioni</div>
       </div>`;
     }).join(""):'<div class="empty">Nessuna valutazione disponibile</div>'}`;
+  profileModal.dataset.athleteId=id;
+  noteDate.value=new Date().toISOString().slice(0,10);
+  noteText.value="";
+  renderAthleteNotes(id);
   profileModal.classList.add("open");
 }
 
+
+
+function renderAthleteNotes(id){
+  if(!window.athleteNotesList)return;
+  const notes=(db.notes||[]).filter(n=>n.athleteId===id).sort((a,b)=>(b.date+(b.createdAt||"")).localeCompare(a.date+(a.createdAt||"")));
+  athleteNotesList.innerHTML=notes.length?notes.map(n=>`
+    <div class="note-item">
+      <div class="row"><div class="note-date">${fmt(n.date)}</div><span class="spacer"></span><button class="btn danger" onclick="deleteAthleteNote('${n.id}')">Elimina</button></div>
+      <div>${escapeHtml(n.text)}</div>
+    </div>`).join(""):'<div class="empty">Nessuna annotazione</div>';
+}
+function addAthleteNote(){
+  const athleteId=profileModal.dataset.athleteId,text=noteText.value.trim();
+  if(!athleteId||!text)return alert("Scrivi un'annotazione.");
+  db.notes.push({id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),athleteId,date:noteDate.value||new Date().toISOString().slice(0,10),text,createdAt:new Date().toISOString()});
+  noteText.value="";persist();renderAthleteNotes(athleteId);
+}
+function deleteAthleteNote(id){
+  if(!confirm("Eliminare questa annotazione?"))return;
+  const athleteId=profileModal.dataset.athleteId;
+  db.notes=(db.notes||[]).filter(n=>n.id!==id);
+  persist();renderAthleteNotes(athleteId);
+}
 
 function getTechnogymImports(){
   const map={};
@@ -840,6 +1025,37 @@ function getTechnogymImports(){
     map[key].count++;
   });
   return Object.values(map).sort((a,b)=>b.date.localeCompare(a.date));
+}
+
+
+function renderPdfEditor(){
+  if(!window.pdfEditAthlete)return;
+  const current=pdfEditAthlete.value;
+  pdfEditAthlete.innerHTML='<option value="">Seleziona atleta</option>'+db.athletes.slice().sort((a,b)=>(a.surname+a.name).localeCompare(b.surname+b.name)).map(a=>`<option value="${a.id}" ${a.id===current?"selected":""}>${a.surname} ${a.name}</option>`).join("");
+  renderPdfImportChoices();
+}
+function renderPdfImportChoices(){
+  if(!window.pdfEditImport)return;
+  const athleteId=pdfEditAthlete.value,imports=getTechnogymImports().filter(x=>x.athleteId===athleteId),current=pdfEditImport.value;
+  pdfEditImport.innerHTML=imports.length?imports.map(x=>`<option value="${x.id}" ${x.id===current?"selected":""}>${fmt(x.date)} · ${x.count} valori</option>`).join(""):'<option value="">Nessuna importazione</option>';
+  renderPdfEditorFields();
+}
+function renderPdfEditorFields(){
+  if(!window.pdfEditFields)return;
+  const importId=pdfEditImport.value;
+  if(!importId){pdfEditFields.innerHTML="";pdfEditStatus.textContent="Nessuna importazione Technogym disponibile per questo atleta.";pdfEditDate.value="";return}
+  const item=getTechnogymImports().find(x=>x.id===importId);if(!item)return;
+  pdfEditDate.value=item.date||"";
+  const rows=db.evaluations.filter(e=>{const key=e.importId||`TG-${e.athleteId}-${e.date}`;const isTech=e.source==="technogym"||String(e.notes||"").toLowerCase().includes("technogym");return isTech&&key===importId}).sort((a,b)=>a.test.localeCompare(b.test));
+  pdfEditStatus.textContent=`${rows.length} valori caricati. Modificali e salva tutto insieme.`;
+  pdfEditFields.innerHTML=rows.map(e=>{const t=db.tests.find(x=>x.name===e.test)||{};return `<div class="field"><label>${escapeHtml(e.test)} ${t.unit?`(${escapeHtml(t.unit)})`:""}</label><input class="pdf-bulk-value" data-evalid="${e.id}" type="number" step="any" value="${e.value}"></div>`}).join("");
+}
+function savePdfBulkEdits(){
+  const importId=pdfEditImport.value;if(!importId)return alert("Seleziona un'importazione.");
+  const item=getTechnogymImports().find(x=>x.id===importId);if(!item)return;
+  const newDate=pdfEditDate.value||item.date;
+  document.querySelectorAll(".pdf-bulk-value").forEach(input=>{const e=db.evaluations.find(x=>x.id===input.dataset.evalid);if(e){e.value=Number(input.value);e.date=newDate;e.notes="Corretto manualmente da Dati PDF atleta";e.source="technogym";e.importId=`TG-${e.athleteId}-${newDate}`}});
+  persist();alert("Tutte le correzioni del PDF sono state salvate.");renderPdfEditor();
 }
 
 function renderDataManagement(){
@@ -892,7 +1108,7 @@ function deleteAllTechnogym(){
   alert("Tutte le importazioni Technogym sono state eliminate.");
 }
 
-function refreshAll(){renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();renderDataManagement();if(window.cloudUrl)updateCloudUI()}
+function refreshAll(){ensureV8Data();renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();renderPdfEditor();renderComparisonSelectors();renderDataManagement();if(window.cloudUrl)updateCloudUI()}
 initNav();refreshAll();autoCloudStartup();addEventListener("resize",drawChart);
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
 </script>
