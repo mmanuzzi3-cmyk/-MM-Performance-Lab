@@ -164,6 +164,22 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
  body.print-comparison .muted{color:#555!important}
 }
 
+
+.audit-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}
+.audit-card{background:#111216;border:1px solid var(--line);border-radius:12px;padding:14px}
+.audit-card b{display:block;font-size:24px;color:var(--gold2)}
+.audit-athlete{border:1px solid var(--line);background:#111216;border-radius:14px;padding:14px;margin-bottom:12px}
+.audit-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.audit-status{padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800}
+.audit-ok{background:#153522;color:#8de0a8}.audit-warn{background:#3c3215;color:#f2d874}.audit-bad{background:#401c1c;color:#ff9c9c}
+.audit-missing{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.audit-chip{padding:6px 9px;border-radius:999px;background:#24262c;border:1px solid #34363d;font-size:12px}
+.audit-import{margin-top:10px;padding:10px;border-radius:10px;background:#0d0e11;border:1px solid var(--line)}
+@media(max-width:760px){.audit-summary{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.audit-summary{grid-template-columns:1fr}}
+
+.missing-value{color:#ffb3b3;font-style:italic}
+.standardize-box{border:1px solid var(--line);background:#111216;border-radius:12px;padding:12px;margin-top:12px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
@@ -174,7 +190,7 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V8 Operativa Cloud</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V8.2 Parametri standard Cloud</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -325,6 +341,36 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
   </section>
 
   <div id="comparisonPrintArea" class="compare-report"></div>
+
+
+<section id="review" class="section">
+  <div class="card">
+    <div class="row">
+      <div><h3 style="margin-bottom:4px">Revisione automatica dati</h3>
+      <div class="muted">Controlla per ogni atleta quali parametri Technogym sono presenti e quali mancano.</div></div>
+      <span class="spacer"></span>
+      <button class="btn gold" onclick="renderAutomaticReview()">Aggiorna revisione</button>
+    </div>
+    <div class="formgrid" style="margin-top:14px">
+      <div class="field"><label>Filtro atleta</label><input id="reviewSearch" placeholder="Nome atleta..." oninput="renderAutomaticReview()"></div>
+      <div class="field"><label>Visualizza</label><select id="reviewFilter" onchange="renderAutomaticReview()">
+        <option value="all">Tutti</option><option value="missing">Solo con dati mancanti</option><option value="complete">Solo completi</option>
+      </select></div>
+    </div>
+    <div class="standardize-box">
+  <div class="row">
+    <div>
+      <b>Uniforma parametri per tutti gli atleti</b>
+      <div class="muted">Aggiunge automaticamente i parametri mancanti come “dato mancante”, senza inventare valori.</div>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn gold" onclick="standardizeAllAthletes()">Uniforma tutti</button>
+  </div>
+</div>
+<div id="reviewSummary" class="audit-summary"></div>
+    <div id="reviewList"></div>
+  </div>
+</section>
 
   <section id="settings" class="section">
     <div class="card"><h3>Cloud sicuro</h3>
@@ -553,7 +599,7 @@ ensureV8Data();
 function touchDb(){db.meta=db.meta||{};db.meta.updatedAt=new Date().toISOString()}
 function escapeHtml(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 
-const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["pdfdata","Dati PDF"],["compare","Report confronti"],["catalog","Catalogo Test"],["data","Gestione dati"],["settings","Impostazioni"]];
+const pages=[["dashboard","Dashboard"],["athletes","Atleti"],["evaluations","Valutazioni"],["analysis","Analisi"],["technogym","Import Technogym"],["pdfdata","Dati PDF"],["compare","Report confronti"],["catalog","Catalogo Test"],["data","Gestione dati"],["settings","Impostazioni"],["review","Revisione dati"]];
 function persist(){touchDb();localStorage.setItem("mmpl_db",JSON.stringify(db));refreshAll();scheduleCloudPush()}
 function initNav(){let html=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("");nav.innerHTML=html;mobilebar.innerHTML=pages.map((p,i)=>`<button class="${i===0?'active':''}" onclick="go('${p[0]}',this)">${p[1]}</button>`).join("")}
 function go(id,btn){document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll("nav button,.mobilebar button").forEach(x=>x.classList.toggle("active",x.textContent===pages.find(p=>p[0]===id)[1]));pageTitle.textContent=pages.find(p=>p[0]===id)[1];refreshAll()}
@@ -577,7 +623,7 @@ function getAnalysisRows(){
   const t=db.tests.find(x=>x.name===name)||{unit:"",direction:"high"};
   const q=(analysisSearch?.value||"").toLowerCase().trim();
   let rows=db.athletes.map(a=>{
-    const es=db.evaluations.filter(e=>e.athleteId===a.id&&e.test===name).sort((x,y)=>x.date.localeCompare(y.date));
+    const es=db.evaluations.filter(e=>e.athleteId===a.id&&e.test===name&&!isMissingEvaluation(e)).sort((x,y)=>x.date.localeCompare(y.date));
     if(!es.length)return null;
     const first=es[0],last=es.at(-1);
     const improvement=first.value===0?0:((t.direction==="high"?(last.value-first.value):(first.value-last.value))/Math.abs(first.value))*100;
@@ -602,19 +648,125 @@ function renderComparisonSelectors(){
 function setAllCompareMetrics(value){document.querySelectorAll(".compare-metric").forEach(x=>x.checked=value)}
 function selectedComparisonAthletes(){if(compareMode.value==="all")return db.athletes.slice();const ids=[...document.querySelectorAll(".compare-athlete:checked")].map(x=>x.value);return db.athletes.filter(a=>ids.includes(a.id))}
 function selectedComparisonMetrics(){return [...document.querySelectorAll(".compare-metric:checked")].map(x=>x.value)}
-function latestEvalFor(athleteId,test){return db.evaluations.filter(e=>e.athleteId===athleteId&&e.test===test).sort((a,b)=>b.date.localeCompare(a.date))[0]||null}
+function latestEvalFor(athleteId,test){
+  const rows=db.evaluations.filter(e=>e.athleteId===athleteId&&e.test===test)
+    .sort((a,b)=>b.date.localeCompare(a.date));
+  return rows.find(e=>!isMissingEvaluation(e))||rows[0]||null;
+}
 function buildComparisonReport(){
   const athletes=selectedComparisonAthletes(),metrics=selectedComparisonMetrics();
   if(!athletes.length)return alert("Seleziona almeno un atleta.");
   if(!metrics.length)return alert("Seleziona almeno un parametro.");
   const rows=athletes.slice().sort((a,b)=>(a.surname+a.name).localeCompare(b.surname+b.name));
   const title=compareMode.value==="all"?"Confronto completo squadra":"Confronto atleti selezionati";
-  const table=`<table><thead><tr><th>Atleta</th>${metrics.map(m=>`<th>${escapeHtml(m)}</th>`).join("")}</tr></thead><tbody>${rows.map(a=>`<tr><td><b>${escapeHtml(a.surname)} ${escapeHtml(a.name)}</b></td>${metrics.map(m=>{const e=latestEvalFor(a.id,m),t=db.tests.find(x=>x.name===m)||{};return `<td>${e?`${e.value} ${escapeHtml(t.unit||"")}<div class="muted">${fmt(e.date)}</div>`:"—"}</td>`}).join("")}</tr>`).join("")}</tbody></table>`;
+  const table=`<table><thead><tr><th>Atleta</th>${metrics.map(m=>`<th>${escapeHtml(m)}</th>`).join("")}</tr></thead><tbody>${rows.map(a=>`<tr><td><b>${escapeHtml(a.surname)} ${escapeHtml(a.name)}</b></td>${metrics.map(m=>{const e=latestEvalFor(a.id,m),t=db.tests.find(x=>x.name===m)||{};return `<td>${e?(isMissingEvaluation(e)?`<span class="missing-value">Dato mancante</span><div class="muted">${fmt(e.date)}</div>`:`${e.value} ${escapeHtml(t.unit||"")}<div class="muted">${fmt(e.date)}</div>`):"—"}</td>`}).join("")}</tr>`).join("")}</tbody></table>`;
   const notes=rows.map(a=>{const last=(db.notes||[]).filter(n=>n.athleteId===a.id).sort((x,y)=>(y.date+(y.createdAt||"")).localeCompare(x.date+(x.createdAt||"")))[0];return last?`<tr><td><b>${escapeHtml(a.surname)} ${escapeHtml(a.name)}</b></td><td>${fmt(last.date)}</td><td>${escapeHtml(last.text)}</td></tr>`:""}).filter(Boolean).join("");
   const content=`<div class="card"><h1 style="margin-bottom:4px">MM Performance Lab</h1><h2>${title}</h2><div class="muted">Generato il ${new Date().toLocaleDateString("it-IT")} · ${rows.length} atleti · ${metrics.length} parametri</div><div style="height:16px"></div>${table}${notes?`<h3 style="margin-top:24px">Ultime annotazioni</h3><table><thead><tr><th>Atleta</th><th>Data</th><th>Annotazione</th></tr></thead><tbody>${notes}</tbody></table>`:""}</div>`;
   comparisonPreview.innerHTML=content;comparisonPrintArea.innerHTML=content;
 }
 function printComparisonReport(){buildComparisonReport();if(!comparisonPrintArea.innerHTML)return;document.body.classList.add("print-comparison");window.print();setTimeout(()=>document.body.classList.remove("print-comparison"),500)}
+
+
+const TECHNOGYM_EXPECTED_METRICS=[
+ "Wellness Age","Peso","BMI","Massa grassa %","Massa grassa kg","Massa magra %","Massa magra",
+ "Contenuto minerale osseo %","Contenuto minerale osseo","Massa magra tessuti molli %","Massa magra tessuti molli",
+ "Massa muscolare scheletrica %","Massa muscolare scheletrica","Acqua corporea totale","Acqua corporea totale kg",
+ "Acqua extracellulare","Acqua extracellulare kg","Acqua intracellulare","Acqua intracellulare kg",
+ "Metabolismo basale","Angolo di fase","Mobilità collo sinistro","Mobilità collo destro","Mobilità spalla sinistra",
+ "Mobilità spalla destra","Mobilità anche","Mobilità caviglia sinistra","Mobilità caviglia destra",
+ "Equilibrio sinistro","Equilibrio destro","Memoria","Attenzione","Velocità mentale","Chest Press","Leg Press","Leg Extension","VO₂ Max"
+];
+function technogymImportsForAthlete(id){return getTechnogymImports().filter(x=>x.athleteId===id).sort((a,b)=>b.date.localeCompare(a.date))}
+function evaluationsForImport(importId){return db.evaluations.filter(e=>{const key=e.importId||`TG-${e.athleteId}-${e.date}`;const isTech=e.source==="technogym"||e.source==="technogym-missing"||String(e.notes||"").toLowerCase().includes("technogym");return isTech&&key===importId})}
+function reviewImportCompleteness(item){const present=new Set(evaluationsForImport(item.id).filter(e=>!isMissingEvaluation(e)).map(e=>e.test));const missing=TECHNOGYM_EXPECTED_METRICS.filter(x=>!present.has(x));const presentCount=TECHNOGYM_EXPECTED_METRICS.length-missing.length;return {missing,presentCount,total:TECHNOGYM_EXPECTED_METRICS.length,percent:Math.round(presentCount/TECHNOGYM_EXPECTED_METRICS.length*100)}}
+
+function ensureTechnogymCatalogComplete(){
+  const unitMap={
+    "Wellness Age":"anni","Peso":"kg","BMI":"kg/m²","Massa grassa %":"%","Massa grassa kg":"kg",
+    "Massa magra %":"%","Massa magra":"kg","Contenuto minerale osseo %":"%","Contenuto minerale osseo":"kg",
+    "Massa magra tessuti molli %":"%","Massa magra tessuti molli":"kg","Massa muscolare scheletrica %":"%",
+    "Massa muscolare scheletrica":"kg","Acqua corporea totale":"%","Acqua corporea totale kg":"kg",
+    "Acqua extracellulare":"%","Acqua extracellulare kg":"kg","Acqua intracellulare":"%","Acqua intracellulare kg":"kg",
+    "Metabolismo basale":"kcal","Angolo di fase":"°","Mobilità collo sinistro":"°","Mobilità collo destro":"°",
+    "Mobilità spalla sinistra":"°","Mobilità spalla destra":"°","Mobilità anche":"°","Mobilità caviglia sinistra":"°",
+    "Mobilità caviglia destra":"°","Equilibrio sinistro":"s","Equilibrio destro":"s","Memoria":"punteggio",
+    "Attenzione":"ms","Velocità mentale":"ms","Chest Press":"kg","Leg Press":"kg","Leg Extension":"kg","VO₂ Max":"ml/kg/min"
+  };
+  TECHNOGYM_EXPECTED_METRICS.forEach(name=>{
+    if(!db.tests.some(t=>t.name===name)){
+      const lowNames=["Massa grassa %","Massa grassa kg","BMI","Attenzione","Velocità mentale"];
+      db.tests.push({
+        name,
+        unit:unitMap[name]||"",
+        direction:lowNames.includes(name)?"low":"high",
+        category:"Technogym"
+      });
+    }
+  });
+}
+
+function latestTechnogymDateForAthlete(athleteId){
+  const imports=technogymImportsForAthlete(athleteId);
+  return imports[0]?.date||new Date().toISOString().slice(0,10);
+}
+
+function standardizeAthleteParameters(athleteId,dateOverride=null){
+  ensureTechnogymCatalogComplete();
+  const date=dateOverride||latestTechnogymDateForAthlete(athleteId);
+  let added=0;
+
+  TECHNOGYM_EXPECTED_METRICS.forEach(testName=>{
+    const already=db.evaluations.some(e=>e.athleteId===athleteId&&e.test===testName&&e.date===date);
+    if(!already){
+      db.evaluations.push({
+        id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),
+        athleteId,
+        test:testName,
+        date,
+        value:null,
+        notes:"Dato mancante - parametro standard",
+        source:"technogym-missing",
+        importId:`TG-${athleteId}-${date}`
+      });
+      added++;
+    }
+  });
+  return added;
+}
+
+function standardizeAllAthletes(){
+  if(!db.athletes.length)return alert("Non ci sono atleti.");
+  if(!confirm("Uniformare tutti gli atleti allo stesso elenco di parametri Technogym?\nI valori mancanti verranno creati come 'dato mancante', senza assegnare numeri."))return;
+
+  let total=0;
+  db.athletes.forEach(a=>{
+    total+=standardizeAthleteParameters(a.id);
+  });
+  persist();
+  alert(`Uniformazione completata. Aggiunti ${total} campi mancanti.`);
+  renderAutomaticReview();
+}
+
+function isMissingEvaluation(e){
+  return e && (e.value===null || e.value==="" || Number.isNaN(Number(e.value)));
+}
+
+function renderAutomaticReview(){
+ if(!window.reviewList)return;
+ const q=(reviewSearch?.value||"").toLowerCase().trim(),filter=reviewFilter?.value||"all";
+ const rows=db.athletes.slice().sort((a,b)=>(a.surname+a.name).localeCompare(b.surname+b.name)).filter(a=>(`${a.surname} ${a.name} ${a.id}`).toLowerCase().includes(q)).map(a=>{const imports=technogymImportsForAthlete(a.id),latest=imports[0]||null,audit=latest?reviewImportCompleteness(latest):{missing:[...TECHNOGYM_EXPECTED_METRICS],presentCount:0,total:TECHNOGYM_EXPECTED_METRICS.length,percent:0};return {a,imports,latest,audit}});
+ const filtered=rows.filter(r=>filter==="missing"?r.audit.missing.length>0:filter==="complete"?r.audit.missing.length===0:true);
+ const complete=rows.filter(r=>r.audit.missing.length===0).length,incomplete=rows.length-complete,avg=rows.length?Math.round(rows.reduce((s,r)=>s+r.audit.percent,0)/rows.length):0;
+ reviewSummary.innerHTML=`<div class="audit-card"><span class="muted">Atleti controllati</span><b>${rows.length}</b></div><div class="audit-card"><span class="muted">Completi</span><b>${complete}</b></div><div class="audit-card"><span class="muted">Con dati mancanti</span><b>${incomplete}</b></div><div class="audit-card"><span class="muted">Completezza media</span><b>${avg}%</b></div>`;
+ reviewList.innerHTML=filtered.length?filtered.map(({a,imports,latest,audit})=>{
+   const cls=!latest?"audit-bad":audit.missing.length===0?"audit-ok":audit.percent>=75?"audit-warn":"audit-bad";
+   const label=!latest?"Nessun PDF":audit.missing.length===0?"Completo":`${audit.missing.length} mancanti`;
+   const missing=audit.missing.length?`<div class="audit-missing">${audit.missing.map(x=>`<span class="audit-chip">${escapeHtml(x)}</span>`).join("")}</div>`:'<div class="good" style="margin-top:10px">Tutti i parametri attesi sono presenti.</div>';
+   const history=imports.map(item=>{const check=reviewImportCompleteness(item);return `<div class="audit-import"><div class="row"><div><b>${fmt(item.date)}</b><div class="muted">${item.count} valori salvati</div></div><span class="spacer"></span><span class="audit-status ${check.missing.length===0?"audit-ok":check.percent>=75?"audit-warn":"audit-bad"}">${check.presentCount}/${check.total}</span><button class="btn" onclick="openImportFromReview('${a.id}','${item.id}')">Correggi</button></div></div>`}).join("");
+   return `<div class="audit-athlete"><div class="audit-head"><div style="min-width:190px"><b>${escapeHtml(a.surname)} ${escapeHtml(a.name)}</b><div class="muted">${escapeHtml(a.id)}</div></div><span class="audit-status ${cls}">${label}</span>${latest?`<span class="muted">Ultimo PDF: ${fmt(latest.date)}</span>`:""}<span class="spacer"></span><b>${audit.presentCount}/${audit.total}</b></div>${missing}${history}</div>`;
+ }).join(""):'<div class="empty">Nessun atleta corrisponde al filtro.</div>';
+}
+function openImportFromReview(athleteId,importId){go("pdfdata");setTimeout(()=>{pdfEditAthlete.value=athleteId;renderPdfImportChoices();pdfEditImport.value=importId;renderPdfEditorFields()},50)}
 
 function renderAnalysis(){
   const selected=analysisTest?.value;
@@ -941,8 +1093,24 @@ function saveTechnogymValues(){
     }
   });
 
+  ensureTechnogymCatalogComplete();
+  TECHNOGYM_EXPECTED_METRICS.forEach(testName=>{
+    const exists=db.evaluations.some(e=>e.athleteId===tgAthlete.value&&e.test===testName&&e.date===tgDate.value);
+    if(!exists){
+      db.evaluations.push({
+        id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),
+        athleteId:tgAthlete.value,
+        test:testName,
+        date:tgDate.value,
+        value:null,
+        notes:"Dato mancante - parametro standard",
+        source:"technogym-missing",
+        importId:`TG-${tgAthlete.value}-${tgDate.value}`
+      });
+    }
+  });
   persist();
-  const saved=db.evaluations.filter(e=>e.athleteId===tgAthlete.value&&e.date===tgDate.value&&e.source==="technogym");
+  const saved=db.evaluations.filter(e=>e.athleteId===tgAthlete.value&&e.date===tgDate.value&&(e.source==="technogym"||e.source==="technogym-missing"));
   const strengthSaved=["Chest Press","Leg Press","Leg Extension"].filter(name=>saved.some(e=>e.test===name));
   alert(`${inserted} valori inseriti, ${updated} aggiornati.\nTest forza salvati: ${strengthSaved.join(", ")||"nessuno"}.`);
 
@@ -1018,7 +1186,7 @@ function deleteAthleteNote(id){
 function getTechnogymImports(){
   const map={};
   db.evaluations.forEach(e=>{
-    const isTech=e.source==="technogym"||String(e.notes||"").toLowerCase().includes("technogym");
+    const isTech=e.source==="technogym"||e.source==="technogym-missing"||String(e.notes||"").toLowerCase().includes("technogym");
     if(!isTech)return;
     const key=e.importId||`TG-${e.athleteId}-${e.date}`;
     if(!map[key])map[key]={id:key,athleteId:e.athleteId,date:e.date,count:0};
@@ -1046,15 +1214,15 @@ function renderPdfEditorFields(){
   if(!importId){pdfEditFields.innerHTML="";pdfEditStatus.textContent="Nessuna importazione Technogym disponibile per questo atleta.";pdfEditDate.value="";return}
   const item=getTechnogymImports().find(x=>x.id===importId);if(!item)return;
   pdfEditDate.value=item.date||"";
-  const rows=db.evaluations.filter(e=>{const key=e.importId||`TG-${e.athleteId}-${e.date}`;const isTech=e.source==="technogym"||String(e.notes||"").toLowerCase().includes("technogym");return isTech&&key===importId}).sort((a,b)=>a.test.localeCompare(b.test));
+  const rows=db.evaluations.filter(e=>{const key=e.importId||`TG-${e.athleteId}-${e.date}`;const isTech=e.source==="technogym"||e.source==="technogym-missing"||String(e.notes||"").toLowerCase().includes("technogym");return isTech&&key===importId}).sort((a,b)=>a.test.localeCompare(b.test));
   pdfEditStatus.textContent=`${rows.length} valori caricati. Modificali e salva tutto insieme.`;
-  pdfEditFields.innerHTML=rows.map(e=>{const t=db.tests.find(x=>x.name===e.test)||{};return `<div class="field"><label>${escapeHtml(e.test)} ${t.unit?`(${escapeHtml(t.unit)})`:""}</label><input class="pdf-bulk-value" data-evalid="${e.id}" type="number" step="any" value="${e.value}"></div>`}).join("");
+  pdfEditFields.innerHTML=rows.map(e=>{const t=db.tests.find(x=>x.name===e.test)||{};return `<div class="field"><label>${escapeHtml(e.test)} ${t.unit?`(${escapeHtml(t.unit)})`:""}</label><input class="pdf-bulk-value" data-evalid="${e.id}" type="number" step="any" value="${e.value===null||e.value===undefined?"":e.value}"></div>`}).join("");
 }
 function savePdfBulkEdits(){
   const importId=pdfEditImport.value;if(!importId)return alert("Seleziona un'importazione.");
   const item=getTechnogymImports().find(x=>x.id===importId);if(!item)return;
   const newDate=pdfEditDate.value||item.date;
-  document.querySelectorAll(".pdf-bulk-value").forEach(input=>{const e=db.evaluations.find(x=>x.id===input.dataset.evalid);if(e){e.value=Number(input.value);e.date=newDate;e.notes="Corretto manualmente da Dati PDF atleta";e.source="technogym";e.importId=`TG-${e.athleteId}-${newDate}`}});
+  document.querySelectorAll(".pdf-bulk-value").forEach(input=>{const e=db.evaluations.find(x=>x.id===input.dataset.evalid);if(e){e.value=input.value.trim()===""?null:Number(input.value);e.date=newDate;e.notes="Corretto manualmente da Dati PDF atleta";e.source="technogym";e.importId=`TG-${e.athleteId}-${newDate}`}});
   persist();alert("Tutte le correzioni del PDF sono state salvate.");renderPdfEditor();
 }
 
@@ -1089,7 +1257,7 @@ function deleteTechnogymImport(importId){
 
   db.evaluations=db.evaluations.filter(e=>{
     const key=e.importId||`TG-${e.athleteId}-${e.date}`;
-    const isTech=e.source==="technogym"||String(e.notes||"").toLowerCase().includes("technogym");
+    const isTech=e.source==="technogym"||e.source==="technogym-missing"||String(e.notes||"").toLowerCase().includes("technogym");
     return !(isTech&&key===importId);
   });
   persist();
@@ -1101,14 +1269,14 @@ function deleteAllTechnogym(){
   if(!confirm(`Eliminare tutte le ${imports.length} importazioni Technogym?\nGli atleti e le valutazioni manuali resteranno intatti.`))return;
 
   db.evaluations=db.evaluations.filter(e=>{
-    const isTech=e.source==="technogym"||String(e.notes||"").toLowerCase().includes("technogym");
+    const isTech=e.source==="technogym"||e.source==="technogym-missing"||String(e.notes||"").toLowerCase().includes("technogym");
     return !isTech;
   });
   persist();
   alert("Tutte le importazioni Technogym sono state eliminate.");
 }
 
-function refreshAll(){ensureV8Data();renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();renderPdfEditor();renderComparisonSelectors();renderDataManagement();if(window.cloudUrl)updateCloudUI()}
+function refreshAll(){ensureV8Data();renderAthletes();renderEvaluations();renderCatalog();renderAnalysis();refreshDashboard();initTechnogym();renderPdfEditor();renderComparisonSelectors();renderAutomaticReview();renderDataManagement();if(window.cloudUrl)updateCloudUI()}
 initNav();refreshAll();autoCloudStartup();addEventListener("resize",drawChart);
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
 </script>
