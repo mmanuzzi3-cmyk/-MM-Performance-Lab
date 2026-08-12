@@ -188,6 +188,9 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
 .qc-badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800}
 .qc-badge.ok{background:#153522;color:#8de0a8}.qc-badge.warn{background:#3c3215;color:#f2d874}.qc-badge.bad{background:#401c1c;color:#ff9c9c}
 @media(max-width:760px){.qc-item{grid-template-columns:1fr}}
+
+.qc-confirmed{border-color:#285c38!important;opacity:.9}
+.qc-confirmed-note{color:#8de0a8;font-size:12px;font-weight:700;margin-top:4px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
@@ -1011,6 +1014,22 @@ const TG_QC_RULES={
 };
 function getTgValue(name){return tgValues.find(v=>v.test===name)?.value}
 function qcPush(list,severity,test,message){list.push({severity,test,message})}
+
+const tgConfirmedQualityIssues=new Set();
+
+function tgQualityIssueKey(issue){
+  return `${issue.severity}|${issue.test}|${issue.message}`;
+}
+function confirmTgQualityIssue(encodedKey){
+  tgConfirmedQualityIssues.add(decodeURIComponent(encodedKey));
+  runTechnogymQualityCheck();
+}
+function resetTgQualityConfirmationFor(testName){
+  [...tgConfirmedQualityIssues].forEach(key=>{
+    if(key.includes(`|${testName}|`))tgConfirmedQualityIssues.delete(key);
+  });
+}
+
 function runTechnogymQualityCheck(){
   if(!window.tgQualityPanel)return {issues:[],blocking:0,warnings:0};
   const issues=[];
@@ -1018,7 +1037,10 @@ function runTechnogymQualityCheck(){
   tgValues.forEach(v=>{
     const rule=TG_QC_RULES[v.test],val=Number(v.value);
     if(!Number.isFinite(val)){qcPush(issues,"bad",v.test,"Valore non numerico o vuoto.");return}
-    if(rule&&(val<rule[0]||val>rule[1]))qcPush(issues,"bad",v.test,`Valore ${val} fuori intervallo atteso (${rule[0]}–${rule[1]}). Verifica il PDF.`);
+    if(rule&&(val<rule[0]||val>rule[1])){
+      const severity=["Attenzione","Velocità mentale"].includes(v.test)?"warn":"bad";
+      qcPush(issues,severity,v.test,`Valore ${val} fuori intervallo atteso (${rule[0]}–${rule[1]}). Verifica il PDF.`);
+    }
   });
 
   const fat=Number(getTgValue("Massa grassa %")),lean=Number(getTgValue("Massa magra %"));
@@ -1050,11 +1072,20 @@ function runTechnogymQualityCheck(){
   if(Number.isFinite(lp)&&Number.isFinite(le)&&le>lp*1.15)qcPush(issues,"warn","Forza","Leg Extension superiore alla Leg Press: possibile associazione errata.");
   if(Number.isFinite(cp)&&Number.isFinite(lp)&&cp>lp*1.5)qcPush(issues,"warn","Forza","Chest Press molto superiore alla Leg Press: verifica l’associazione.");
 
-  const blocking=issues.filter(x=>x.severity==="bad").length,warnings=issues.filter(x=>x.severity==="warn").length;
+  const blocking=issues.filter(x=>x.severity==="bad"&&!tgConfirmedQualityIssues.has(tgQualityIssueKey(x))).length,
+        warnings=issues.filter(x=>x.severity==="warn"&&!tgConfirmedQualityIssues.has(tgQualityIssueKey(x))).length;
   tgQualityPanel.style.display="block";
   tgQualityPanel.className="import-check "+(blocking?"bad":warnings?"warn":"ok");
   tgQualitySummary.textContent=blocking?`${blocking} errore/i da correggere${warnings?` · ${warnings} avviso/i`:""}`:warnings?`Nessun errore bloccante · ${warnings} avviso/i`:"Controllo superato: nessuna anomalia rilevata.";
-  tgQualityList.innerHTML=issues.length?issues.map(x=>`<div class="qc-item"><b>${escapeHtml(x.test)}</b><span class="qc-badge ${x.severity}">${x.severity==="bad"?"ERRORE":"VERIFICA"}</span><div>${escapeHtml(x.message)}</div></div>`).join(""):'<div class="good">✓ Tutti i controlli sono stati superati.</div>';
+  tgQualityList.innerHTML=issues.length?issues.map(x=>{
+    const key=tgQualityIssueKey(x),confirmed=tgConfirmedQualityIssues.has(key);
+    return `<div class="qc-item ${confirmed?"qc-confirmed":""}">
+      <b>${escapeHtml(x.test)}</b>
+      <span class="qc-badge ${confirmed?"ok":x.severity}">${confirmed?"CONFERMATO":(x.severity==="bad"?"ERRORE":"VERIFICA")}</span>
+      <div>${escapeHtml(x.message)}${confirmed?'<div class="qc-confirmed-note">✓ Verificato manualmente sul PDF</div>':""}</div>
+      ${confirmed?"":`<button class="btn" onclick="confirmTgQualityIssue('${encodeURIComponent(key)}')">Conferma valore corretto</button>`}
+    </div>`;
+  }).join(""):'<div class="good">✓ Tutti i controlli sono stati superati.</div>';
   window.lastTgQualityResult={issues,blocking,warnings};
   return window.lastTgQualityResult;
 }
@@ -1175,7 +1206,7 @@ function detectTechnogymValues(pages){
   tgDetected.innerHTML=tgValues.map((v,i)=>`
     <div class="field">
       <label>${v.test} (${v.unit})</label>
-      <input type="number" step="any" value="${v.value}" onchange="tgValues[${i}].value=Number(this.value);runTechnogymQualityCheck()">
+      <input type="number" step="any" value="${v.value}" onchange="tgValues[${i}].value=Number(this.value);resetTgQualityConfirmationFor(tgValues[${i}].test);runTechnogymQualityCheck()">
     </div>`).join("");
   runTechnogymQualityCheck();
 }
@@ -1193,7 +1224,7 @@ function ensureTest(name,unit){
 
 function saveTechnogymValues(){
   const qc=runTechnogymQualityCheck();
-  if(qc.blocking>0){alert(`Importazione bloccata: ${qc.blocking} valore/i risultano incoerenti. Correggili prima di salvare.`);return}
+  if(qc.blocking>0){alert(`Importazione bloccata: ${qc.blocking} valore/i devono essere corretti oppure confermati come corretti dopo verifica sul PDF.`);return}
   if(qc.warnings>0&&!confirm(`Ci sono ${qc.warnings} valori da verificare. Hai controllato il PDF e vuoi salvarli comunque?`))return;
   if(!tgValues.length)return alert("Non ci sono valori da salvare.");
   if(!tgAthlete.value)return alert("Seleziona un atleta.");
@@ -1247,7 +1278,7 @@ function saveTechnogymValues(){
 
 function clearTechnogym(){
   if(window.tgQualityPanel){tgQualityPanel.style.display="none";tgQualityList.innerHTML="";tgQualitySummary.textContent="—"}
-  window.lastTgQualityResult=null;
+  window.lastTgQualityResult=null;tgConfirmedQualityIssues.clear();
   tgValues=[];
   if(window.tgPdf) tgPdf.value="";
   if(window.tgDetected) tgDetected.innerHTML="";
