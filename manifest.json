@@ -1,9 +1,9 @@
 {
-  "name": "MM Performance Lab V8.2 Parametri standard",
-  "short_name": "MM Lab V8.2",
+  "name": "MM Performance Lab V8.4 Controllo Storico",
+  "short_name": "MM Lab V8.4",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#08090c",
   "theme_color": "#08090c",
-  "description": "Stesso elenco di parametri Technogym per tutti gli atleti, con dati mancanti espliciti"
+  "description": "Controllo qualità automatico dei valori importati dai PDF Technogym"
 }

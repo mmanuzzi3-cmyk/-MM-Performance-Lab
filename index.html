@@ -180,6 +180,14 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
 
 .missing-value{color:#ffb3b3;font-style:italic}
 .standardize-box{border:1px solid var(--line);background:#111216;border-radius:12px;padding:12px;margin-top:12px}
+
+.import-check{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#111216}
+.import-check.ok{border-color:#285c38}.import-check.warn{border-color:#7a6423}.import-check.bad{border-color:#7b3030}
+.qc-list{display:grid;gap:8px;margin-top:10px}
+.qc-item{display:grid;grid-template-columns:1.2fr .6fr 2fr;gap:10px;align-items:center;padding:9px;border-radius:10px;background:#0d0e11;border:1px solid var(--line)}
+.qc-badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800}
+.qc-badge.ok{background:#153522;color:#8de0a8}.qc-badge.warn{background:#3c3215;color:#f2d874}.qc-badge.bad{background:#401c1c;color:#ff9c9c}
+@media(max-width:760px){.qc-item{grid-template-columns:1fr}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
 </head>
@@ -190,7 +198,7 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
   <nav id="nav"></nav>
 </aside>
 <main>
-  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V8.2 Parametri standard Cloud</div></div>
+  <div class="top"><div><h2 id="pageTitle">Dashboard</h2><div class="muted">Performance management system</div></div><div class="pill">V8.4 Controllo storico Cloud</div></div>
 
   <section id="dashboard" class="section active">
     <div class="grid">
@@ -264,6 +272,11 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
       </div>
       <div id="tgStatus" class="statusline">Nessun PDF caricato.</div>
       <div id="tgDetected" class="detected"></div>
+<div id="tgQualityPanel" class="import-check" style="display:none">
+  <div class="row"><div><b>Controllo qualità importazione</b><div id="tgQualitySummary" class="muted">—</div></div>
+  <span class="spacer"></span><button class="btn" onclick="runTechnogymQualityCheck()">Ricontrolla</button></div>
+  <div id="tgQualityList" class="qc-list"></div>
+</div>
       <div class="toolbar" style="margin-top:16px">
         <button class="btn gold" onclick="saveTechnogymValues()">Salva valori riconosciuti</button>
         <button class="btn" onclick="clearTechnogym()">Pulisci</button>
@@ -347,7 +360,7 @@ main,.section,.card,.data-card{min-width:0;max-width:100%}
   <div class="card">
     <div class="row">
       <div><h3 style="margin-bottom:4px">Revisione automatica dati</h3>
-      <div class="muted">Controlla per ogni atleta quali parametri Technogym sono presenti e quali mancano.</div></div>
+      <div class="muted">Controlla per ogni atleta i parametri mancanti e i valori sospetti, anche nelle importazioni Technogym già salvate.</div></div>
       <span class="spacer"></span>
       <button class="btn gold" onclick="renderAutomaticReview()">Aggiorna revisione</button>
     </div>
@@ -751,6 +764,49 @@ function isMissingEvaluation(e){
   return e && (e.value===null || e.value==="" || Number.isNaN(Number(e.value)));
 }
 
+
+function historicalQualityCheck(item){
+  const vals={};
+  evaluationsForImport(item.id).forEach(e=>{if(!isMissingEvaluation(e)) vals[e.test]=Number(e.value)});
+  const issues=[], add=(severity,test,message)=>issues.push({severity,test,message}), has=n=>Number.isFinite(vals[n]);
+
+  Object.entries(vals).forEach(([test,val])=>{
+    const rule=TG_QC_RULES[test];
+    if(rule&&(val<rule[0]||val>rule[1])) add("bad",test,`Valore ${val} fuori intervallo atteso (${rule[0]}–${rule[1]}).`);
+  });
+
+  if(has("Massa grassa %")&&has("Massa magra %")){
+    const sum=vals["Massa grassa %"]+vals["Massa magra %"];
+    if(Math.abs(sum-100)>2) add("bad","Composizione corporea",`Massa grassa % + massa magra % = ${sum.toFixed(1)}%.`);
+  }
+
+  if(has("Peso")){
+    [["Massa grassa %","Massa grassa kg"],["Massa magra %","Massa magra"],["Acqua corporea totale","Acqua corporea totale kg"]].forEach(([pct,kg])=>{
+      if(has(pct)&&has(kg)){
+        const expected=vals["Peso"]*vals[pct]/100, tol=Math.max(1.5,expected*.08);
+        if(Math.abs(expected-vals[kg])>tol) add("bad",pct,`${pct}/${kg} non coerenti col peso: circa ${expected.toFixed(1)} kg attesi, ${vals[kg]} kg presenti.`);
+      }
+    });
+  }
+
+  if(has("Acqua corporea totale kg")&&has("Acqua extracellulare kg")&&has("Acqua intracellulare kg")){
+    const sum=vals["Acqua extracellulare kg"]+vals["Acqua intracellulare kg"];
+    if(Math.abs(sum-vals["Acqua corporea totale kg"])>1.5) add("bad","Acqua corporea",`ECW + ICW = ${sum.toFixed(1)} kg, TBW = ${vals["Acqua corporea totale kg"].toFixed(1)} kg.`);
+  }
+
+  [["Mobilità collo sinistro","Mobilità collo destro","Mobilità collo"],["Mobilità spalla sinistra","Mobilità spalla destra","Mobilità spalle"],["Mobilità caviglia sinistra","Mobilità caviglia destra","Mobilità caviglie"],["Equilibrio sinistro","Equilibrio destro","Equilibrio"]].forEach(([l,r,label])=>{
+    if(has(l)&&has(r)){
+      const diff=Math.abs(vals[l]-vals[r]), base=Math.max(1,(Math.abs(vals[l])+Math.abs(vals[r]))/2);
+      if(diff/base>.5) add("warn",label,`Grande differenza destra/sinistra (${vals[l]} vs ${vals[r]}).`);
+    }
+  });
+
+  if(has("Leg Press")&&has("Leg Extension")&&vals["Leg Extension"]>vals["Leg Press"]*1.15) add("warn","Forza","Leg Extension superiore alla Leg Press: verifica possibile scambio.");
+  if(has("Chest Press")&&has("Leg Press")&&vals["Chest Press"]>vals["Leg Press"]*1.5) add("warn","Forza","Chest Press molto superiore alla Leg Press: verifica possibile associazione errata.");
+
+  return {issues,blocking:issues.filter(x=>x.severity==="bad").length,warnings:issues.filter(x=>x.severity==="warn").length};
+}
+
 function renderAutomaticReview(){
  if(!window.reviewList)return;
  const q=(reviewSearch?.value||"").toLowerCase().trim(),filter=reviewFilter?.value||"all";
@@ -762,7 +818,13 @@ function renderAutomaticReview(){
    const cls=!latest?"audit-bad":audit.missing.length===0?"audit-ok":audit.percent>=75?"audit-warn":"audit-bad";
    const label=!latest?"Nessun PDF":audit.missing.length===0?"Completo":`${audit.missing.length} mancanti`;
    const missing=audit.missing.length?`<div class="audit-missing">${audit.missing.map(x=>`<span class="audit-chip">${escapeHtml(x)}</span>`).join("")}</div>`:'<div class="good" style="margin-top:10px">Tutti i parametri attesi sono presenti.</div>';
-   const history=imports.map(item=>{const check=reviewImportCompleteness(item);return `<div class="audit-import"><div class="row"><div><b>${fmt(item.date)}</b><div class="muted">${item.count} valori salvati</div></div><span class="spacer"></span><span class="audit-status ${check.missing.length===0?"audit-ok":check.percent>=75?"audit-warn":"audit-bad"}">${check.presentCount}/${check.total}</span><button class="btn" onclick="openImportFromReview('${a.id}','${item.id}')">Correggi</button></div></div>`}).join("");
+   const history=imports.map(item=>{
+      const check=reviewImportCompleteness(item),quality=historicalQualityCheck(item);
+      const qClass=quality.blocking?"bad":quality.warnings?"warn":"ok";
+      const qLabel=quality.blocking?`${quality.blocking} errore/i`:quality.warnings?`${quality.warnings} avviso/i`:"Valori OK";
+      const details=quality.issues.length?`<div style="margin-top:8px">${quality.issues.map(x=>`<div style="padding:6px 0"><span class="qc-badge ${x.severity}">${x.severity==="bad"?"ERRORE":"VERIFICA"}</span> <b>${escapeHtml(x.test)}</b> — ${escapeHtml(x.message)}</div>`).join("")}</div>`:"";
+      return `<div class="audit-import"><div class="row"><div><b>${fmt(item.date)}</b><div class="muted">${item.count} valori salvati</div></div><span class="spacer"></span><span class="audit-status ${check.missing.length===0?"audit-ok":check.percent>=75?"audit-warn":"audit-bad"}">${check.presentCount}/${check.total}</span><span class="qc-badge ${qClass}">${qLabel}</span><button class="btn" onclick="openImportFromReview('${a.id}','${item.id}')">Correggi</button></div>${details}</div>`;
+   }).join("");
    return `<div class="audit-athlete"><div class="audit-head"><div style="min-width:190px"><b>${escapeHtml(a.surname)} ${escapeHtml(a.name)}</b><div class="muted">${escapeHtml(a.id)}</div></div><span class="audit-status ${cls}">${label}</span>${latest?`<span class="muted">Ultimo PDF: ${fmt(latest.date)}</span>`:""}<span class="spacer"></span><b>${audit.presentCount}/${audit.total}</b></div>${missing}${history}</div>`;
  }).join(""):'<div class="empty">Nessun atleta corrisponde al filtro.</div>';
 }
@@ -935,6 +997,68 @@ async function readTechnogymPdf(ev){
   }
 }
 
+
+const TG_QC_RULES={
+ "Wellness Age":[8,100],"Peso":[25,200],"BMI":[10,50],"Massa grassa %":[2,60],"Massa grassa kg":[1,100],
+ "Massa magra %":[35,98],"Massa magra":[20,150],"Contenuto minerale osseo %":[1,10],"Contenuto minerale osseo":[0.8,8],
+ "Massa magra tessuti molli %":[30,95],"Massa magra tessuti molli":[15,145],"Massa muscolare scheletrica %":[15,65],
+ "Massa muscolare scheletrica":[8,80],"Acqua corporea totale":[30,80],"Acqua corporea totale kg":[15,110],
+ "Acqua extracellulare":[20,55],"Acqua extracellulare kg":[5,50],"Acqua intracellulare":[35,80],"Acqua intracellulare kg":[8,75],
+ "Metabolismo basale":[700,3500],"Angolo di fase":[2,15],"Mobilità collo sinistro":[0,180],"Mobilità collo destro":[0,180],
+ "Mobilità spalla sinistra":[0,220],"Mobilità spalla destra":[0,220],"Mobilità anche":[0,220],"Mobilità caviglia sinistra":[0,90],
+ "Mobilità caviglia destra":[0,90],"Equilibrio sinistro":[0,120],"Equilibrio destro":[0,120],"Memoria":[0,200],
+ "Attenzione":[80,3000],"Velocità mentale":[80,3000],"Chest Press":[1,300],"Leg Press":[1,600],"Leg Extension":[1,300],"VO₂ Max":[10,90]
+};
+function getTgValue(name){return tgValues.find(v=>v.test===name)?.value}
+function qcPush(list,severity,test,message){list.push({severity,test,message})}
+function runTechnogymQualityCheck(){
+  if(!window.tgQualityPanel)return {issues:[],blocking:0,warnings:0};
+  const issues=[];
+
+  tgValues.forEach(v=>{
+    const rule=TG_QC_RULES[v.test],val=Number(v.value);
+    if(!Number.isFinite(val)){qcPush(issues,"bad",v.test,"Valore non numerico o vuoto.");return}
+    if(rule&&(val<rule[0]||val>rule[1]))qcPush(issues,"bad",v.test,`Valore ${val} fuori intervallo atteso (${rule[0]}–${rule[1]}). Verifica il PDF.`);
+  });
+
+  const fat=Number(getTgValue("Massa grassa %")),lean=Number(getTgValue("Massa magra %"));
+  if(Number.isFinite(fat)&&Number.isFinite(lean)&&Math.abs(fat+lean-100)>2)
+    qcPush(issues,"bad","Composizione corporea",`Massa grassa % + massa magra % = ${(fat+lean).toFixed(1)}%. Dovrebbero essere circa 100%.`);
+
+  const weight=Number(getTgValue("Peso"));
+  [["Massa grassa %","Massa grassa kg"],["Massa magra %","Massa magra"],["Acqua corporea totale","Acqua corporea totale kg"]].forEach(([p,k])=>{
+    const pct=Number(getTgValue(p)),kg=Number(getTgValue(k));
+    if(Number.isFinite(weight)&&Number.isFinite(pct)&&Number.isFinite(kg)&&weight>0){
+      const expected=weight*pct/100,tol=Math.max(1.5,expected*.08);
+      if(Math.abs(expected-kg)>tol)qcPush(issues,"bad",p,`${p} e ${k} non sono coerenti col peso: attesi circa ${expected.toFixed(1)} kg, importati ${kg} kg.`);
+    }
+  });
+
+  const tbw=Number(getTgValue("Acqua corporea totale kg")),ecw=Number(getTgValue("Acqua extracellulare kg")),icw=Number(getTgValue("Acqua intracellulare kg"));
+  if([tbw,ecw,icw].every(Number.isFinite)&&Math.abs((ecw+icw)-tbw)>1.5)
+    qcPush(issues,"bad","Acqua corporea",`ECW + ICW = ${(ecw+icw).toFixed(1)} kg, TBW = ${tbw.toFixed(1)} kg.`);
+
+  [["Mobilità collo sinistro","Mobilità collo destro","Mobilità collo"],["Mobilità spalla sinistra","Mobilità spalla destra","Mobilità spalle"],["Mobilità caviglia sinistra","Mobilità caviglia destra","Mobilità caviglie"],["Equilibrio sinistro","Equilibrio destro","Equilibrio"]].forEach(([l,r,label])=>{
+    const lv=Number(getTgValue(l)),rv=Number(getTgValue(r));
+    if(Number.isFinite(lv)&&Number.isFinite(rv)){
+      const diff=Math.abs(lv-rv),base=Math.max(1,(Math.abs(lv)+Math.abs(rv))/2);
+      if(diff/base>.5)qcPush(issues,"warn",label,`Grande differenza destra/sinistra (${lv} vs ${rv}). Verifica il PDF.`);
+    }
+  });
+
+  const lp=Number(getTgValue("Leg Press")),le=Number(getTgValue("Leg Extension")),cp=Number(getTgValue("Chest Press"));
+  if(Number.isFinite(lp)&&Number.isFinite(le)&&le>lp*1.15)qcPush(issues,"warn","Forza","Leg Extension superiore alla Leg Press: possibile associazione errata.");
+  if(Number.isFinite(cp)&&Number.isFinite(lp)&&cp>lp*1.5)qcPush(issues,"warn","Forza","Chest Press molto superiore alla Leg Press: verifica l’associazione.");
+
+  const blocking=issues.filter(x=>x.severity==="bad").length,warnings=issues.filter(x=>x.severity==="warn").length;
+  tgQualityPanel.style.display="block";
+  tgQualityPanel.className="import-check "+(blocking?"bad":warnings?"warn":"ok");
+  tgQualitySummary.textContent=blocking?`${blocking} errore/i da correggere${warnings?` · ${warnings} avviso/i`:""}`:warnings?`Nessun errore bloccante · ${warnings} avviso/i`:"Controllo superato: nessuna anomalia rilevata.";
+  tgQualityList.innerHTML=issues.length?issues.map(x=>`<div class="qc-item"><b>${escapeHtml(x.test)}</b><span class="qc-badge ${x.severity}">${x.severity==="bad"?"ERRORE":"VERIFICA"}</span><div>${escapeHtml(x.message)}</div></div>`).join(""):'<div class="good">✓ Tutti i controlli sono stati superati.</div>';
+  window.lastTgQualityResult={issues,blocking,warnings};
+  return window.lastTgQualityResult;
+}
+
 function detectTechnogymValues(pages){
   const page=(n,marker)=>{
     const fixed=pages?.[n-1]?.text||"";
@@ -1051,8 +1175,9 @@ function detectTechnogymValues(pages){
   tgDetected.innerHTML=tgValues.map((v,i)=>`
     <div class="field">
       <label>${v.test} (${v.unit})</label>
-      <input type="number" step="any" value="${v.value}" onchange="tgValues[${i}].value=Number(this.value)">
+      <input type="number" step="any" value="${v.value}" onchange="tgValues[${i}].value=Number(this.value);runTechnogymQualityCheck()">
     </div>`).join("");
+  runTechnogymQualityCheck();
 }
 
 function ensureTest(name,unit){
@@ -1067,6 +1192,9 @@ function ensureTest(name,unit){
 }
 
 function saveTechnogymValues(){
+  const qc=runTechnogymQualityCheck();
+  if(qc.blocking>0){alert(`Importazione bloccata: ${qc.blocking} valore/i risultano incoerenti. Correggili prima di salvare.`);return}
+  if(qc.warnings>0&&!confirm(`Ci sono ${qc.warnings} valori da verificare. Hai controllato il PDF e vuoi salvarli comunque?`))return;
   if(!tgValues.length)return alert("Non ci sono valori da salvare.");
   if(!tgAthlete.value)return alert("Seleziona un atleta.");
 
@@ -1118,6 +1246,8 @@ function saveTechnogymValues(){
 }
 
 function clearTechnogym(){
+  if(window.tgQualityPanel){tgQualityPanel.style.display="none";tgQualityList.innerHTML="";tgQualitySummary.textContent="—"}
+  window.lastTgQualityResult=null;
   tgValues=[];
   if(window.tgPdf) tgPdf.value="";
   if(window.tgDetected) tgDetected.innerHTML="";
